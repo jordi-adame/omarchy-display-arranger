@@ -1,0 +1,21 @@
+{
+  "schemaVersion": 1,
+  "id": "jordi-adame.display-arranger",
+  "name": "Display arranger",
+  "version": "1.0.0",
+  "author": "Jordi Adame",
+  "description": "Pick the display arrangement from a grid of tiles.",
+  "kinds": [
+    "bar-widget"
+  ],
+  "entryPoints": {
+    "barWidget": "v1/Panel.qml"
+  },
+  "barWidget": {
+    "displayName": "Display arranger",
+    "description": "Tiles for every arrangement of the connected displays; a click applies and persists it.",
+    "category": "System",
+    "allowMultiple": false,
+    "defaultSection": "right"
+  }
+}

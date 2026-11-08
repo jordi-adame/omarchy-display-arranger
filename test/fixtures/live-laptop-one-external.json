@@ -1,0 +1,44 @@
+[
+  {
+    "name": "eDP-1",
+    "description": "LG Display 0x07C8",
+    "make": "LG Display",
+    "model": "0x07C8",
+    "serial": "",
+    "width": 1920,
+    "height": 1200,
+    "refreshRate": 120.04300,
+    "x": 0,
+    "y": 1080,
+    "scale": 1,
+    "transform": 0,
+    "disabled": false,
+    "mirrorOf": "none",
+    "focused": false,
+    "availableModes": [
+      "1920x1200@120.04Hz"
+    ]
+  },
+  {
+    "name": "DP-1",
+    "description": "Northwind Corporation NW-1560 DEMO00000742",
+    "make": "Northwind Corporation",
+    "model": "NW-1560",
+    "serial": "DEMO00000742",
+    "width": 3840,
+    "height": 2160,
+    "refreshRate": 60.00000,
+    "x": 0,
+    "y": 0,
+    "scale": 2,
+    "transform": 0,
+    "disabled": false,
+    "mirrorOf": "none",
+    "focused": true,
+    "availableModes": [
+      "3840x2160@60.00Hz",
+      "3840x2160@60.00Hz",
+      "3840x2160@59.94Hz"
+    ]
+  }
+]

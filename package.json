@@ -1,0 +1,10 @@
+{
+  "name": "omarchy-display-arranger",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Omarchy bar plugin: pick your display arrangement from a grid of tiles",
+  "license": "MIT",
+  "scripts": {
+    "test": "node --test"
+  }
+}

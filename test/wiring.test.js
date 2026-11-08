@@ -84,7 +84,9 @@ for (const [how, line] of [
   ["single quotes", "require('hypr.display-arrangement')"],
   ["no parentheses", 'require "hypr.display-arrangement"'],
   ["spaces and indentation", '  require ( "hypr.display-arrangement" )'],
-  ["a trailing comment", 'require("hypr.display-arrangement") -- arranger']
+  ["a trailing comment", 'require("hypr.display-arrangement") -- arranger'],
+  ["pcall", 'local ok = pcall(require, "hypr.display-arrangement")'],
+  ["an assignment", 'local arrangement = require("hypr.display-arrangement")']
 ]) {
   test(`a hand-written require line counts as wired: ${how}`, () => {
     const text = MONITORS_LUA + "\n" + line + "\n"
@@ -96,7 +98,7 @@ for (const [how, line] of [
 }
 
 test("a commented-out require line does not count: the line is appended", () => {
-  const text = MONITORS_LUA + '-- require("hypr.display-arrangement")\n'
+  const text = MONITORS_LUA + '-- require("hypr.display-arrangement")\n-- local x = require("hypr.display-arrangement")\n'
   const stub = stubEnv({ monitorsLua: text })
   runApply(stub, args(planFor("right")))
   assert.equal(fs.readFileSync(stub.monitorsLua, "utf8"), text + APPENDED)

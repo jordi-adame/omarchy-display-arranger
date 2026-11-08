@@ -56,11 +56,16 @@ DISABLE_FLAG="$TOGGLES_DIR/internal-monitor-disable.lua"
 MIRROR_FLAG="$TOGGLES_DIR/internal-monitor-mirror.lua"
 CLAMSHELL_FLAG="$TOGGLES_DIR/internal-monitor-clamshell.lua"
 
-# What wire_monitors_lua appends, and how it recognises a require of the file
-# (outside a comment, with or without parentheses, double or single quotes).
+# What wire_monitors_lua appends, and how it recognises a require of the file:
+# the word require, then the module name as a string, anywhere on a line once
+# comments are stripped (plain call, no parentheses, pcall, an assignment).
 REQUIRE_LINE='require("hypr.display-arrangement")'
 REQUIRE_COMMENT='-- Display arrangement from the jordi-adame.display-arranger bar widget. Keep this the last line.'
-REQUIRE_PATTERN='^[[:space:]]*require[[:space:]]*\(?[[:space:]]*["'"'"']hypr\.display-arrangement["'"'"']'
+REQUIRE_PATTERN='\brequire\b[^"'"'"']*["'"'"']hypr\.display-arrangement["'"'"']'
+
+requires_arrangement() {
+  sed 's/--.*$//' -- "$1" | grep -Eq "$REQUIRE_PATTERN"
+}
 
 dry_run=0
 if [[ ${1:-} == --dry-run ]]; then
@@ -147,7 +152,7 @@ wire_monitors_lua() {
     notice "monitors.lua not found at $target; add $REQUIRE_LINE at its end yourself so the arrangement survives a reload"
     return 0
   fi
-  if grep -Eq "$REQUIRE_PATTERN" "$target"; then
+  if requires_arrangement "$target"; then
     (( dry_run )) && say "dry-run: $target already requires hypr.display-arrangement; nothing to add"
     return 0
   fi

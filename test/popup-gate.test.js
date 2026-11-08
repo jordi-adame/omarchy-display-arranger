@@ -78,3 +78,14 @@ test("Panel.qml: output-removing tiles close the popup and defer the plan; the o
   // The state the script checks is passed in its environment.
   assert.match(panelSource, /DISPLAY_ARRANGER_POPUP_OPEN: applyProc\.popupOpen \? "1" : "0"/)
 })
+
+test("Panel.qml keeps the result of a deferred run until the next click, not until the next open", () => {
+  // Mirror and laptop-off run after the popup has closed, so their status or
+  // notice would be wiped by a reset on open before anyone saw it.
+  const onOpened = panelSource.slice(panelSource.indexOf("onOpenedChanged:"), panelSource.indexOf("}", panelSource.indexOf("onOpenedChanged:") + 200))
+  assert.doesNotMatch(onOpened, /statusText\s*=/, "open leaves statusText alone")
+  assert.doesNotMatch(onOpened, /noticeText\s*=/, "open leaves noticeText alone")
+  const choose = panelSource.slice(panelSource.indexOf("function choose("), panelSource.indexOf("function runPlan("))
+  assert.match(choose, /root\.statusText = ""/)
+  assert.match(choose, /root\.noticeText = ""/)
+})

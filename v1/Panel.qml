@@ -94,6 +94,7 @@ Panel {
     var plan = Model.applyPlan(tile, displays, { writtenAt: new Date().toISOString() })
     root.pendingId = tile.id
     root.statusText = ""
+    root.noticeText = ""
     if (Model.removesOutput(plan.mode)) {
       // Close first; runDeferred() runs the plan once the window is unmapped.
       root.deferredPlan = plan
@@ -153,8 +154,8 @@ Panel {
       refresh()
       cursorActive = false
       cursorIndex = -1
-      statusText = ""
-      noticeText = ""
+      // statusText and noticeText stay: a mirror or laptop-off click reports
+      // after the popup has closed, and is read on the next open.
     }
   }
 
@@ -323,7 +324,7 @@ Panel {
           font.pixelSize: Style.font.body
         }
 
-        // Set once by the first click: monitors.lua was wired (or why it was not).
+        // What the last click reported: monitors.lua was wired (or why it was not).
         Text {
           width: parent.width
           visible: root.noticeText !== ""

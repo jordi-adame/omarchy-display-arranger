@@ -2,11 +2,13 @@
 // Qt offscreen platform and saves a PNG. No window, no compositor. The display
 // data is made up: the laptop and Northwind fixtures from test/helpers.js.
 //
-//   TMPDIR=<scratch> node tools/render-preview.js <one|two|mirror> <out.png>
+//   TMPDIR=<scratch> node tools/render-preview.js <one|two|mirror> <out.png> [--notice]
 //
 //   one     the laptop and one external, "above" being the current arrangement
 //   two     the laptop and two identical externals, "one above, one right" current
 //   mirror  the laptop and one external, mirroring, so the mirror tile is current
+//   --notice  adds the consent notice row (Panel.qml's text and buttons, drawn
+//             here in plain QtQuick in place of the shell's Button)
 const fs = require("node:fs")
 const path = require("node:path")
 const { spawnSync } = require("node:child_process")
@@ -14,10 +16,12 @@ const { VERSION_DIR, laptop, northwind, WIRED, tmpdir } = require(path.resolve(_
 
 const which = process.argv[2]
 const out = path.resolve(process.argv[3] || "")
-if (!["one", "two", "mirror"].includes(which) || !process.argv[3]) {
-  console.error("usage: render-preview.js <one|two|mirror> <out.png>")
+const withNotice = process.argv.includes("--notice")
+if (!["one", "two", "mirror"].includes(which) || !process.argv[3] || process.argv.slice(4).some((a) => a !== "--notice")) {
+  console.error("usage: render-preview.js <one|two|mirror> <out.png> [--notice]")
   process.exit(2)
 }
+const STRINGS = JSON.parse(fs.readFileSync(path.join(VERSION_DIR, "i18n", "en.json"), "utf8"))
 const live = northwind("DEMO00000742", { x: 0, y: -1080 })
 const monitors = which === "two" ? [laptop(), live, northwind("DEMO00000519", { x: 1920, y: 0 })]
   : which === "mirror" ? [laptop(), northwind("DEMO00000742", { scale: 1, mirrorOf: "eDP-1", x: 1920, y: 0 })]
@@ -90,6 +94,57 @@ Rectangle {
         font.family: "monospace"
         font.pixelSize: 12
       }
+
+      // The consent notice as Panel.qml lays it out: caption text left, two
+      // small bordered buttons right (the shell's Button at rest).
+      Item {
+        id: consent
+        width: parent.width
+        visible: ${withNotice}
+        implicitHeight: visible ? Math.max(consentText.implicitHeight, consentButtons.implicitHeight) : 0
+        height: implicitHeight
+
+        Text {
+          id: consentText
+          anchors.left: parent.left
+          anchors.right: consentButtons.left
+          anchors.rightMargin: 9
+          anchors.verticalCenter: parent.verticalCenter
+          wrapMode: Text.Wrap
+          text: ${JSON.stringify(STRINGS["wire.offer"])}
+          color: Qt.darker("#cdd6f4", 1.4)
+          font.family: "monospace"
+          font.pixelSize: 12
+        }
+
+        Row {
+          id: consentButtons
+          anchors.right: parent.right
+          anchors.verticalCenter: parent.verticalCenter
+          spacing: 7
+
+          Repeater {
+            model: [${JSON.stringify(STRINGS["wire.yes"])}, ${JSON.stringify(STRINGS["wire.notNow"])}]
+            Rectangle {
+              required property string modelData
+              width: buttonLabel.implicitWidth + 2 * 9 + 2
+              height: buttonLabel.implicitHeight + 2 * 2 + 2
+              radius: 8
+              color: "transparent"
+              border.width: 1
+              border.color: Qt.rgba(0xcd / 255, 0xd6 / 255, 0xf4 / 255, 0.38)
+              Text {
+                id: buttonLabel
+                anchors.centerIn: parent
+                text: parent.modelData
+                color: "#cdd6f4"
+                font.family: "monospace"
+                font.pixelSize: 12
+              }
+            }
+          }
+        }
+      }
     }
   }
 
@@ -99,7 +154,7 @@ Rectangle {
     onTriggered: {
       root.grabToImage(function(result) {
         var ok = result.saveToFile(${JSON.stringify(out)})
-        console.log("PREVIEW " + JSON.stringify({ ok: ok, card: [card.width, card.height], grid: [grid.width, grid.implicitHeight], tile: [grid.tileWidth, grid.tileHeight], current: root.currentId, tiles: root.tiles.length }))
+        console.log("PREVIEW " + JSON.stringify({ ok: ok, card: [card.width, card.height], grid: [grid.width, grid.implicitHeight], tile: [grid.tileWidth, grid.tileHeight], current: root.currentId, tiles: root.tiles.length, notice: consent.visible ? [consentText.lineCount, consentButtons.width] : null }))
         Qt.quit()
       })
     }

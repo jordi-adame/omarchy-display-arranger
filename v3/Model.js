@@ -1191,7 +1191,7 @@ function fileText(tile, displays, opts) {
   ]
 
   var header = [
-    "-- Display arrangement, written by the jordi-adame.display-arranger bar widget.",
+    "-- Display arrangement, written by the io.github.jordi-adame.display-arranger bar widget.",
     "-- Loaded by require(\"hypr.display-arrangement\") at the end of monitors.lua, so these",
     "-- rules override monitors.lua for the outputs below. The next tile click replaces this",
     "-- whole file. Do not edit by hand.",

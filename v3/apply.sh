@@ -1,5 +1,5 @@
 #!/bin/bash
-# Applies one display arrangement chosen in the jordi-adame.display-arranger
+# Applies one display arrangement chosen in the io.github.jordi-adame.display-arranger
 # popup, or wires monitors.lua to load the arrangement file.
 #
 #   apply.sh [--dry-run] apply <normal|laptop-off|mirror> <lua-text> <eval-expr> <eval-expr-lid-closed>
@@ -40,7 +40,7 @@ CLAMSHELL_FLAG="$TOGGLES_DIR/internal-monitor-clamshell.lua"
 # What wire_monitors_lua appends, and how it recognises an existing require:
 # the word require then the module string, anywhere on a line, comments stripped.
 REQUIRE_LINE='require("hypr.display-arrangement")'
-REQUIRE_COMMENT='-- Display arrangement from the jordi-adame.display-arranger bar widget. Keep this the last line.'
+REQUIRE_COMMENT='-- Display arrangement from the io.github.jordi-adame.display-arranger bar widget. Keep this the last line.'
 REQUIRE_PATTERN='\brequire\b[^"'"'"']*["'"'"']hypr\.display-arrangement["'"'"']'
 
 requires_arrangement() {

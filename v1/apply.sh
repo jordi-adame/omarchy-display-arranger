@@ -92,14 +92,17 @@ notice() {
   say "notice: $*"
 }
 
-# Runs a command, or in a dry run prints it.
+# Runs an Omarchy toggle command, or in a dry run prints it. A refusal (the
+# command exits non-zero) fails the click, so the popup never reports success
+# while the toggle is still in place.
 run() {
+  local out
   if (( dry_run )); then
     say "dry-run: would run: $(printf '%q ' "$@")"
     return 0
   fi
   log "run: $(printf '%q ' "$@")"
-  "$@"
+  out="$("$@" 2>&1)" || fail "$(basename "$1") ${2:-} failed: ${out//$'\n'/ }"
 }
 
 # Atomic write: a temp file beside the target, renamed over it in one step,

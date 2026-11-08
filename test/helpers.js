@@ -203,9 +203,12 @@ function stubEnv(opts = {}) {
   const log = path.join(root, "calls.log")
   const toggles = path.join(root, "toggles")
   fs.mkdirSync(toggles)
+  // A stub named in $STUB_FAIL_CMD logs its call, prints "<name>: boom" to
+  // stderr and exits 1, like an Omarchy command that refuses.
   const stub = (name, body) => {
     const file = path.join(bin, name)
-    fs.writeFileSync(file, "#!/bin/bash\nprintf '%s' \"" + name + "\" >>\"" + log + "\"\nfor a in \"$@\"; do printf ' [%s]' \"$a\" >>\"" + log + "\"; done\necho >>\"" + log + "\"\n" + (body || ""))
+    fs.writeFileSync(file, "#!/bin/bash\nprintf '%s' \"" + name + "\" >>\"" + log + "\"\nfor a in \"$@\"; do printf ' [%s]' \"$a\" >>\"" + log + "\"; done\necho >>\"" + log + "\"\n" +
+      "[[ \"${STUB_FAIL_CMD:-}\" == \"" + name + "\" ]] && { echo \"" + name + ": boom\" >&2; exit 1; }\n" + (body || ""))
     fs.chmodSync(file, 0o755)
     return file
   }

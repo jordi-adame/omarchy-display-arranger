@@ -50,6 +50,25 @@ test("normal: Omarchy's laptop-off and mirror flags are lifted after the write, 
   assert.ok(wrote >= 0 && lifted > wrote, "write logged before the toggle: " + log.join(" | "))
 })
 
+test("a failing Omarchy toggle fails the click: mirror off refused, nothing else runs", () => {
+  const stub = stubEnv({ flags: ["internal-monitor-disable", "internal-monitor-mirror"] })
+  const res = runApply(stub, args(planFor("above")), { STUB_FAIL_CMD: "omarchy-hyprland-monitor-internal-mirror" })
+  assert.notEqual(res.status, 0, "exit status reports the failure")
+  assert.match(res.stderr, /omarchy-hyprland-monitor-internal-mirror off failed: .*boom/)
+  assert.deepEqual(kinds(stub.calls()), ["omarchy-hyprland-monitor-internal-mirror off"], "the laptop toggle is not attempted")
+  assert.deepEqual(Object.keys(stub.flags()), ["internal-monitor-disable", "internal-monitor-mirror"], "flags untouched by the failing stub")
+  assert.match(stub.log(), /error: .*mirror off failed/)
+})
+
+test("a failing Omarchy toggle fails the click: laptop off and mirror on", () => {
+  for (const [kind, cmd] of [["off", "omarchy-hyprland-monitor-internal"], ["mirror", "omarchy-hyprland-monitor-internal-mirror"]]) {
+    const stub = stubEnv()
+    const res = runApply(stub, args(planFor(kind)), { STUB_FAIL_CMD: cmd })
+    assert.notEqual(res.status, 0, kind)
+    assert.match(res.stderr, new RegExp(cmd + " \\w+ failed: .*boom"), kind)
+  }
+})
+
 test("normal with the lid shut (clamshell flag): the laptop keeps its state", () => {
   const stub = stubEnv({ flags: ["internal-monitor-clamshell"] })
   const plan = planFor("above")

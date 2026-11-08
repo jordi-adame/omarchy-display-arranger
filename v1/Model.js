@@ -444,7 +444,8 @@ function resolveDisplay(display, config) {
 // Displays with the configured scale, transform and mode in place of the live
 // ones. With no readable scale, the live scale stands in for the tile
 // pictures and the eval when it is trustworthy (the display is on and not
-// mirroring), else 1; the file stores none either way.
+// mirroring), else 1; the file records it as that display's fallback_scale,
+// so the loader lands on the same positions (see fileText).
 function configuredDisplays(displays, monitorsLua) {
   var config = parseConfig(monitorsLua)
   return displays.map(function(d) {
@@ -1044,7 +1045,7 @@ var LOADER = [
   "  local w, h = mode:match(\"^(%d+)x(%d+)\")",
   "  w, h = tonumber(w) or out.width, tonumber(h) or out.height",
   "  if transform % 2 == 1 then w, h = h, w end",
-  "  local s = scale or 1",
+  "  local s = scale or out.fallback_scale or 1",
   "  s = valid_scale(s, w, h)",
   "  return { w = math.floor(w / s + 0.5), h = math.floor(h / s + 0.5) }",
   "end",
@@ -1138,8 +1139,9 @@ function luaTable(entries, indent) {
 
 // Text of ~/.config/hypr/display-arrangement.lua for a tile: the arrangement
 // (kind and order) and, per display, its output key, connector name,
-// description and pixel size. No scale, transform, mode or position is stored;
-// the loader derives them at config load. `sets` is keyed by the connected
+// description and pixel size. No transform, mode or position is stored, and a
+// scale only as the fallback for a display monitors.lua gives none; the loader
+// derives the rest at config load. `sets` is keyed by the connected
 // set so per-set memory can keep several entries later; today the file holds
 // only the last click.
 function fileText(tile, displays, opts) {
@@ -1157,6 +1159,9 @@ function fileText(tile, displays, opts) {
       "height = " + px.h
     ]
     if (d.isLaptop) fields.push("laptop = true")
+    // Only when monitors.lua gives this display no scale: what it ran at when
+    // clicked, so the loader's positions match the eval's.
+    if (!d.scaleKnown) fields.push("fallback_scale = " + scaleKey(d.scale))
     return "{ " + fields.join(", ") + " }"
   })
 
@@ -1168,7 +1173,8 @@ function fileText(tile, displays, opts) {
     "laptop = " + (laptop ? luaString(laptop.key) : "nil"),
     "order = { " + tile.spec.order.map(luaString).join(", ") + " }",
     "-- Connected displays. width x height is the pixel size of the mode they run when\n" +
-    "    -- monitors.lua names none. Scale, transform and mode are read from monitors.lua.\n" +
+    "    -- monitors.lua names none. Scale, transform and mode are read from monitors.lua;\n" +
+    "    -- fallback_scale (the scale at the click) is used only when it gives none.\n" +
     "    outputs = " + luaTable(outputEntries, "    ")
   ]
 
@@ -1179,6 +1185,7 @@ function fileText(tile, displays, opts) {
     "-- whole file. Do not edit by hand.",
     "-- Scales, transforms and modes are not stored here: the loader reads them from",
     "-- monitors.lua (Omarchy's Display panel writes there) and computes the positions.",
+    "-- A display whose scale monitors.lua does not give keeps the scale it had at the click.",
     "-- Laptop off and mirror are Omarchy toggles applied after this file; see the plugin README.",
     "-- display-arranger-format: " + FORMAT_VERSION,
     opts.writtenAt ? "-- written: " + String(opts.writtenAt).replace(/[^0-9TZ:.+-]/g, "") : null

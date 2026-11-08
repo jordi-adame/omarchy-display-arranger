@@ -128,12 +128,44 @@ test("commented-out rules are ignored", () => {
   assert.equal(calls[1].position, "-192x-1080")
 })
 
-test("no monitors.lua: rules carry no scale (Hyprland picks auto), positions assume 1", () => {
-  const calls = runLua(fileFor(one, "above"), null)
+test("no monitors.lua: rules carry no scale (Hyprland picks auto); positions use the scale each display ran at the click", () => {
+  // The fixture laptop runs at 1 and the external at 2, so the file records
+  // those as fallbacks and the loader centers a 1920x1080 external.
+  const d = configured([laptop(), northwind("DEMO00000742")], "")
+  const calls = runLua(fileFor(d, "above"), null)
   assert.deepEqual(calls, [
     { output: "eDP-1", mode: "preferred", position: "0x0" },
-    { output: KEY_742, mode: "preferred", position: "-960x-2160" }
+    { output: KEY_742, mode: "preferred", position: "0x-1080" }
   ])
+})
+
+// Omarchy's default: the catch-all names no number, the external has a rule.
+const AUTO = 'local omarchy_monitor_scale = "auto"\n' +
+  'hl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy_monitor_scale })\n' +
+  'hl.monitor({ output = "desc:Northwind Corporation NW-1560 DEMO00000742", mode = "3840x2160@60", position = "0x0", scale = 2 })\n'
+
+test("an unknown scale: the file records the live scale as that display's fallback, nothing for the others", () => {
+  const d = configured([laptop({ scale: 1.5 }), northwind("DEMO00000742")], AUTO)
+  assert.deepEqual(d.map((x) => [x.scale, x.scaleKnown]), [[1.5, false], [2, true]])
+  const text = fileFor(d, "right")
+  const data = text.slice(0, text.indexOf("-- Loader:"))
+  assert.equal((data.match(/fallback_scale = /g) || []).length, 1)
+  assert.match(data, /output = "eDP-1", [^\n]*fallback_scale = 1\.5 \}/)
+  assert.doesNotMatch(data, /DEMO00000742[^\n]*fallback_scale/)
+})
+
+test("an unknown scale: the loader, the eval and the tiles agree on the live scale at the click", () => {
+  const d = configured([laptop({ scale: 1.5 }), northwind("DEMO00000742")], AUTO)
+  const tile = Model.catalog(d).find((t) => t.kind === "right")
+  // Laptop 1280x800 logical at 1.5; the external (1920x1080) right of it, centered.
+  assert.deepEqual(tile.positions, { "eDP-1": { x: 0, y: 0 }, [KEY_742]: { x: 1280, y: -140 } })
+  const calls = runLua(Model.fileText(tile, d), AUTO)
+  assert.deepEqual(calls, [
+    { output: "eDP-1", mode: "preferred", position: "0x0" },
+    { output: KEY_742, mode: "3840x2160@60", position: "1280x-140", scale: 2 }
+  ])
+  assert.match(Model.evalExpression(tile, d), /output = "eDP-1", mode = "preferred", position = "0x0", disabled = false/)
+  assert.match(Model.evalExpression(tile, d), /position = "1280x-140", scale = 2/)
 })
 
 test("scale \"auto\" or an expression is unknown: no scale in the rule, the earlier rule's own scale is kept by Hyprland", () => {

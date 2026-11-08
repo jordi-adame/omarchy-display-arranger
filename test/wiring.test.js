@@ -195,12 +195,12 @@ test("an eval error leaves monitors.lua unwired", () => {
 })
 
 test("laptop off and mirror wire monitors.lua after the write, before Omarchy's toggle", () => {
-  for (const [kind, toggle] of [["off", "omarchy-hyprland-monitor-internal off"], ["mirror", "omarchy-hyprland-monitor-internal-mirror on"]]) {
+  for (const [kind, after] of [["off", ["omarchy-hyprland-monitor-internal off", "hyprctl"]], ["mirror", ["omarchy-hyprland-monitor-internal-mirror on"]]]) {
     const stub = stubEnv({ monitorsLua: MONITORS_LUA })
     const res = runApply(stub, args(planFor(kind)))
     assert.equal(res.status, 0, res.stderr)
     assert.equal(fs.readFileSync(stub.monitorsLua, "utf8"), MONITORS_LUA + APPENDED, kind)
-    assert.deepEqual(kinds(stub.calls()), ["notify-send", toggle], kind)
+    assert.deepEqual(kinds(stub.calls()), ["notify-send", ...after], kind)
     const log = stub.log().split("\n")
     const wrote = log.findIndex((l) => l.includes("wrote "))
     const wired = log.findIndex((l) => l.includes("wired "))

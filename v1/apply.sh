@@ -210,19 +210,21 @@ apply_normal() {
   local lua="$1" expr="$2" expr_lid_closed="$3"
   [[ -n $expr ]] || fail "missing eval expression"
 
+  # Lid shut while docked: keep the laptop off, as Omarchy's clamshell wants.
+  [[ -f $CLAMSHELL_FLAG && -n $expr_lid_closed ]] && expr="$expr_lid_closed"
+
   if [[ -f $MIRROR_FLAG || -f $DISABLE_FLAG ]]; then
     # Omarchy's toggles load after this file and would win, so lift them.
-    # Each one reloads Hyprland, which applies the new file; no eval needed.
-    # The file holds no live state (see the header), so writing it first is
-    # safe: the reload for the toggle applies the configured scales.
+    # Each one reloads Hyprland synchronously, which applies the new file when
+    # monitors.lua requires it; the eval afterwards covers a monitors.lua that
+    # is not wired. The file holds no live state, so writing it first is safe
+    # and saves one visible move.
     write_target "$lua"
     [[ -f $MIRROR_FLAG ]] && run "$MIRROR_CMD" off
     [[ -f $DISABLE_FLAG ]] && run "$INTERNAL_CMD" on
+    eval_live "$expr"
     return 0
   fi
-
-  # Lid shut while docked: keep the laptop off, as Omarchy's clamshell wants.
-  [[ -f $CLAMSHELL_FLAG && -n $expr_lid_closed ]] && expr="$expr_lid_closed"
 
   # Live first: if Hyprland rejects the rules, the persisted file stays as it was.
   eval_live "$expr"
@@ -234,12 +236,12 @@ apply_laptop_off() {
   write_target "$lua"
   # Omarchy refuses to turn the laptop off while mirroring.
   [[ -f $MIRROR_FLAG ]] && run "$MIRROR_CMD" off
-  if [[ -f $DISABLE_FLAG ]]; then
-    # Already off: Omarchy would do nothing, so apply the externals' rules live.
-    [[ -n $expr ]] && eval_live "$expr"
-    return 0
-  fi
-  run "$INTERNAL_CMD" off
+  # Omarchy's toggle reloads Hyprland (a no-op when the laptop is already
+  # off); the externals' rules are then evaled live, which also covers a
+  # monitors.lua that is not wired.
+  [[ -f $DISABLE_FLAG ]] || run "$INTERNAL_CMD" off
+  [[ -n $expr ]] && eval_live "$expr"
+  return 0
 }
 
 apply_mirror() {

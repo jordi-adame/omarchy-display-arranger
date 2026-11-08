@@ -36,18 +36,31 @@ test("normal: Hyprland rejects the rules, the file stays as it was", () => {
   assert.equal(fs.readFileSync(stub.target, "utf8"), "old\n")
 })
 
-test("normal: Omarchy's laptop-off and mirror flags are lifted after the write, no eval", () => {
+test("normal: Omarchy's laptop-off and mirror flags are lifted after the write, then the rules are evaled live", () => {
   const stub = stubEnv({ flags: ["internal-monitor-disable", "internal-monitor-mirror"] })
-  const res = runApply(stub, args(planFor("above")))
+  const plan = planFor("above")
+  const res = runApply(stub, args(plan))
   assert.equal(res.status, 0, res.stderr)
-  assert.deepEqual(kinds(stub.calls()), ["omarchy-hyprland-monitor-internal-mirror off", "omarchy-hyprland-monitor-internal on"])
+  // The eval comes after the toggles' reloads, so it also lands when
+  // monitors.lua is not wired (nothing else would apply the file then).
+  assert.deepEqual(kinds(stub.calls()), ["omarchy-hyprland-monitor-internal-mirror off", "omarchy-hyprland-monitor-internal on", "hyprctl eval"])
+  assert.ok(stub.calls()[2].includes("[" + plan.evalExpr + "]"))
   assert.ok(fs.existsSync(stub.target), "file written before the reloads")
   assert.deepEqual(Object.keys(stub.flags()), [], "both flags gone")
   // The write happened first: the log records it before the toggle commands.
-  const log = fs.readFileSync(path.join(stub.env.DISPLAY_ARRANGER_LOG_DIR, "apply.log"), "utf8").split("\n")
+  const log = stub.log().split("\n")
   const wrote = log.findIndex((l) => l.includes("wrote "))
   const lifted = log.findIndex((l) => l.includes("monitor-internal-mirror off"))
-  assert.ok(wrote >= 0 && lifted > wrote, "write logged before the toggle: " + log.join(" | "))
+  const evaled = log.findIndex((l) => l.includes("hyprctl eval") || l.includes("run: ") && l.includes(" eval "))
+  assert.ok(wrote >= 0 && lifted > wrote && evaled > lifted, "write, toggle, eval: " + log.join(" | "))
+})
+
+test("normal with a toggle on and the lid shut: the eval after the toggles keeps the laptop state", () => {
+  const stub = stubEnv({ flags: ["internal-monitor-mirror", "internal-monitor-clamshell"] })
+  const plan = planFor("above")
+  const res = runApply(stub, args(plan))
+  assert.equal(res.status, 0, res.stderr)
+  assert.ok(stub.calls()[1].includes("[" + plan.evalExprLidClosed + "]"), stub.calls().join(" | "))
 })
 
 test("a failing Omarchy toggle fails the click: mirror off refused, nothing else runs", () => {
@@ -77,11 +90,13 @@ test("normal with the lid shut (clamshell flag): the laptop keeps its state", ()
   assert.ok(stub.calls()[0].includes("[" + plan.evalExprLidClosed + "]"))
 })
 
-test("laptop off: write, then Omarchy's internal off (writes the disable flag)", () => {
+test("laptop off: write, Omarchy's internal off (writes the disable flag), then the externals' rules live", () => {
   const stub = stubEnv()
-  const res = runApply(stub, args(planFor("off")))
+  const plan = planFor("off")
+  const res = runApply(stub, args(plan))
   assert.equal(res.status, 0, res.stderr)
-  assert.deepEqual(kinds(stub.calls()), ["omarchy-hyprland-monitor-internal off"])
+  assert.deepEqual(kinds(stub.calls()), ["omarchy-hyprland-monitor-internal off", "hyprctl eval"])
+  assert.ok(stub.calls()[1].includes("[" + plan.evalExpr + "]") && !stub.calls()[1].includes("eDP-1"))
   assert.ok(fs.existsSync(stub.target))
   assert.deepEqual(Object.keys(stub.flags()), ["internal-monitor-disable"])
 })
@@ -89,7 +104,7 @@ test("laptop off: write, then Omarchy's internal off (writes the disable flag)",
 test("laptop off from mirror: mirror off first", () => {
   const stub = stubEnv({ flags: ["internal-monitor-mirror"] })
   runApply(stub, args(planFor("off")))
-  assert.deepEqual(kinds(stub.calls()), ["omarchy-hyprland-monitor-internal-mirror off", "omarchy-hyprland-monitor-internal off"])
+  assert.deepEqual(kinds(stub.calls()), ["omarchy-hyprland-monitor-internal-mirror off", "omarchy-hyprland-monitor-internal off", "hyprctl eval"])
 })
 
 test("laptop off when already off: eval the externals only", () => {

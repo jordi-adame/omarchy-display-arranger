@@ -8,9 +8,15 @@ import "Model.js" as Model
 
 // Bar icon with a popup of arrangement tiles, one per arrangement possible
 // with the displays connected now. A click applies the arrangement live and
-// persists it through apply.sh. The highlighted tile is read from
-// `hyprctl monitors all -j`, never from the file; tile sizes use the scales
-// monitors.lua configures, not the live ones, so a toggle cannot distort them.
+// writes the arrangement file through apply.sh. The highlighted tile is read
+// from `hyprctl monitors all -j`, never from the file; tile sizes use the
+// scales monitors.lua configures, not the live ones, so a toggle cannot
+// distort them.
+//
+// monitors.lua is never edited without consent. While it exists, is writable
+// and lacks the require line, a notice under the grid offers to add it: Yes
+// runs `apply.sh wire`, Not now hides the offer until the popup next opens.
+// The state is the file itself (line present or not), nothing is stored.
 //
 // Mirror and laptop-off take an output away, and an Omarchy KeyboardPanel open
 // on the output that goes crashes the shell (Quickshell re-creates its dismiss
@@ -36,6 +42,9 @@ Panel {
   property string monitorsJson: "[]"
   property string monitorsSignature: ""
   property string monitorsLuaText: ""
+  // Whether monitors.lua can be wired: "" until checked, then "missing",
+  // "readonly" or "ok" (file and directory writable, as tmp + mv needs).
+  property string monitorsLuaAccess: ""
   // The previous click's file: its fallback scales serve a display whose scale
   // cannot be read or computed (see Model.configuredDisplays).
   property string arrangementText: ""
@@ -44,44 +53,75 @@ Panel {
   readonly property string currentId: Model.currentTileId(tiles, displays)
   readonly property string emptyReason: Model.emptyReason(displays)
 
-  // Keyboard and mouse share one cursor over the tiles: 0..tiles.length-1.
+  // Keyboard and mouse share one cursor: the tiles 0..tiles.length-1, then,
+  // while the consent offer is up, its Yes and Not now buttons.
   property int cursorIndex: -1
   property bool cursorActive: false
+  // The tile the cursor left for the buttons, to come back to.
+  property int gridReturnIndex: -1
+  readonly property int cursorCount: tiles.length + (wireOffered ? 2 : 0)
   property string pendingId: ""
   property string statusText: ""
-  // What apply.sh reports without failing (a "notice:" line): the monitors.lua
-  // wiring it did, or why it did not touch the file.
+  // What apply.sh wire reported (a "notice:" line): the wiring it did, or why
+  // it did not touch the file. Replaces the offer until the popup next opens.
   property string noticeText: ""
   // A plan waiting for the popup to unmap (mirror and laptop-off only).
   property var deferredPlan: null
   readonly property bool busy: applyProc.running || deferredPlan !== null
   readonly property int columns: 3
 
+  // The consent notice. `wired` is read from monitors.lua with the same test
+  // apply.sh uses; `wireDismissed` is Not now, for this popup session only.
+  // The offer waits for a first click: the require line would load a missing
+  // arrangement file, which Hyprland reports as a config error.
+  readonly property bool wired: Model.requiresArrangement(monitorsLuaText)
+  property bool wireDismissed: false
+  readonly property bool wireOffered: tiles.length > 0 && monitorsLuaAccess === "ok" && !wired && arrangementText !== "" && !wireDismissed && noticeText === ""
+  // Why the file cannot be wired, shown in place of the offer, without buttons.
+  readonly property string wireBlocked: tiles.length === 0 || wired ? ""
+    : (monitorsLuaAccess === "missing" ? root.tr("wire.missing", "monitors.lua not found; add require(\"hypr.display-arrangement\") at its end yourself so the arrangement survives a reload")
+      : (monitorsLuaAccess === "readonly" ? root.tr("wire.readOnly", "monitors.lua is not writable; add require(\"hypr.display-arrangement\") at its end yourself") : ""))
+
   function refresh() {
     if (!monitorsLuaProc.running) monitorsLuaProc.running = true
+    if (!accessProc.running) accessProc.running = true
     if (!arrangementProc.running) arrangementProc.running = true
     if (!monitorsProc.running) monitorsProc.running = true
   }
 
   function moveCursor(dx, dy) {
-    if (tiles.length === 0) return
+    if (cursorCount === 0) return
     if (!cursorActive || cursorIndex < 0) {
       cursorActive = true
       cursorIndex = Math.max(0, tiles.indexOf(tiles.filter(function(t) { return t.id === root.currentId })[0]))
       return
     }
     var next = cursorIndex
-    if (dx !== 0) {
-      next = cursorIndex + dx
+    if (cursorIndex >= tiles.length) {
+      // On the consent buttons: left and right between them, up back to the grid.
+      if (dx !== 0) next = Math.max(tiles.length, Math.min(cursorCount - 1, cursorIndex + dx))
+      else if (dy < 0 && tiles.length > 0) next = Math.min(tiles.length - 1, gridReturnIndex >= 0 ? gridReturnIndex : tiles.length - 1)
+    } else if (dx !== 0) {
+      next = Math.max(0, Math.min(tiles.length - 1, cursorIndex + dx))
     } else if (dy !== 0) {
       next = cursorIndex + dy * columns
-      if (next >= tiles.length || next < 0) next = cursorIndex
+      // Down past the last row lands on the Yes button while the offer is up.
+      if (next >= tiles.length) next = wireOffered ? tiles.length : cursorIndex
+      else if (next < 0) next = cursorIndex
     }
-    cursorIndex = Math.max(0, Math.min(tiles.length - 1, next))
+    if (next >= tiles.length && cursorIndex < tiles.length) gridReturnIndex = cursorIndex
+    cursorIndex = Math.max(0, Math.min(cursorCount - 1, next))
   }
 
   function activateCursor() {
-    if (cursorIndex >= 0 && cursorIndex < tiles.length) choose(cursorIndex)
+    if (cursorIndex < 0) return
+    if (cursorIndex < tiles.length) {
+      choose(cursorIndex)
+      return
+    }
+    if (!wireOffered) return
+    if (cursorIndex === tiles.length) wire()
+    else dismissWire()
   }
 
   function choose(index) {
@@ -106,6 +146,33 @@ Panel {
     applyProc.popupOpen = root.opened
     applyProc.command = ["bash", root.scriptPath, "apply", plan.mode, plan.luaText, plan.evalExpr, plan.evalExprLidClosed]
     applyProc.running = true
+  }
+
+  // Yes on the consent notice: apply.sh wire adds the require line, once,
+  // after a backup. Its notice replaces the offer; the next refresh reads the
+  // line back from the file.
+  function wire() {
+    if (wireProc.running) return
+    root.noticeText = ""
+    wireProc.command = ["bash", root.scriptPath, "wire"]
+    wireProc.running = true
+  }
+
+  // Not now: the offer returns the next time the popup opens, as long as the line is missing.
+  function dismissWire() {
+    root.wireDismissed = true
+  }
+
+  onWireOfferedChanged: {
+    if (wireOffered || cursorIndex < tiles.length) return
+    // The offer went (answered, or the file changed) with the cursor on a
+    // button: back to the tile it left, or nowhere when the mouse put it there.
+    if (gridReturnIndex >= 0 && tiles.length > 0) {
+      cursorIndex = Math.min(tiles.length - 1, gridReturnIndex)
+    } else {
+      cursorActive = false
+      cursorIndex = -1
+    }
   }
 
   // Runs the deferred plan when the popup is closed and its window is gone.
@@ -149,8 +216,12 @@ Panel {
       refresh()
       cursorActive = false
       cursorIndex = -1
-      // statusText and noticeText stay: a mirror or laptop-off click reports
-      // after the popup has closed, and is read on the next open.
+      // The consent offer comes back on every open while the line is missing,
+      // and the wire reply is read in the session it was given. statusText
+      // stays: a mirror or laptop-off click reports after the popup has
+      // closed, and is read on the next open.
+      wireDismissed = false
+      noticeText = ""
     }
   }
 
@@ -170,6 +241,17 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.monitorsLuaText = String(text || "")
+    }
+    stderr: StdioCollector { waitForEnd: true }
+  }
+
+  // Whether monitors.lua can be wired, for the consent notice.
+  Process {
+    id: accessProc
+    command: ["bash", "-c", "f=$1; if [[ ! -f $f ]]; then echo missing; elif [[ -w $f && -w ${f%/*} ]]; then echo ok; else echo readonly; fi", "access", root.monitorsLuaPath]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.monitorsLuaAccess = String(text || "").trim()
     }
     stderr: StdioCollector { waitForEnd: true }
   }
@@ -215,9 +297,23 @@ Panel {
       var out = String(applyOut.text || "")
       if (exitCode !== 0) root.statusText = err !== "" ? err.split("\n")[0] : root.tr("status.failed", "Could not apply the arrangement")
       else if (out.indexOf("dry-run:") >= 0) root.statusText = root.tr("status.dryRun", "Dry run: nothing applied (see the apply log)")
-      var notices = out.split("\n").filter(function(l) { return l.indexOf("notice: ") === 0 })
-      root.noticeText = notices.length > 0 ? notices[0].slice("notice: ".length) : ""
       root.pendingId = ""
+      root.refresh()
+    }
+  }
+
+  Process {
+    id: wireProc
+    stdout: StdioCollector { id: wireOut; waitForEnd: true }
+    stderr: StdioCollector { id: wireErr; waitForEnd: true }
+    onExited: function(exitCode, exitStatus) {
+      var err = String(wireErr.text || "").trim()
+      var out = String(wireOut.text || "")
+      // The first "notice: " line of stdout is the outcome, wired or not.
+      var notices = out.split("\n").filter(function(l) { return l.indexOf("notice: ") === 0 })
+      if (notices.length > 0) root.noticeText = notices[0].slice("notice: ".length)
+      else if (exitCode !== 0) root.statusText = err !== "" ? err.split("\n")[0] : root.tr("status.wireFailed", "Could not edit monitors.lua")
+      else if (out.indexOf("dry-run:") >= 0) root.statusText = root.tr("status.dryRun", "Dry run: nothing applied (see the apply log)")
       root.refresh()
     }
   }
@@ -329,7 +425,68 @@ Panel {
           font.pixelSize: Style.font.body
         }
 
-        // What the last click reported: monitors.lua was wired (or why it was not).
+        // Consent to edit monitors.lua: the offer with its Yes and Not now,
+        // or why the file cannot be wired (no buttons then). Gone once the
+        // line is there.
+        Item {
+          id: consent
+          width: parent.width
+          visible: root.wireOffered || root.wireBlocked !== ""
+          implicitHeight: Math.max(consentText.implicitHeight, consentButtons.implicitHeight)
+
+          Text {
+            id: consentText
+            anchors.left: parent.left
+            anchors.right: consentButtons.visible ? consentButtons.left : parent.right
+            anchors.rightMargin: consentButtons.visible ? Style.space(8) : 0
+            anchors.verticalCenter: parent.verticalCenter
+            wrapMode: Text.Wrap
+            textFormat: Text.PlainText
+            text: root.wireOffered ? root.tr("wire.offer", "Keep layouts after reloads? Adds one line to monitors.lua (backup kept).") : root.wireBlocked
+            color: Qt.darker(root.bar.foreground, 1.4)
+            font.family: root.bar.fontFamily
+            font.pixelSize: Style.font.caption
+          }
+
+          Row {
+            id: consentButtons
+            anchors.right: parent.right
+            anchors.verticalCenter: parent.verticalCenter
+            visible: root.wireOffered
+            spacing: Style.space(6)
+
+            Repeater {
+              model: [root.tr("wire.yes", "Yes"), root.tr("wire.notNow", "Not now")]
+
+              // Cursor targets tiles.length (Yes) and tiles.length + 1 (Not now),
+              // drawn hot like a tile under the cursor.
+              Button {
+                required property string modelData
+                required property int index
+                text: modelData
+                fontSize: Style.font.caption
+                fontFamily: root.bar.fontFamily
+                foreground: root.bar.foreground
+                horizontalPadding: Style.space(8)
+                verticalPadding: Style.space(2)
+                bordered: true
+                enabled: !wireProc.running
+                hasCursor: root.cursorActive && root.cursorIndex === root.tiles.length + index
+                onClicked: {
+                  if (index === 0) root.wire()
+                  else root.dismissWire()
+                }
+                onHovered: function(isHovered) {
+                  if (!isHovered) return
+                  root.cursorActive = true
+                  root.cursorIndex = root.tiles.length + index
+                }
+              }
+            }
+          }
+        }
+
+        // The wire reply: monitors.lua was wired (with its backup), or why it was not.
         Text {
           width: parent.width
           visible: root.noticeText !== ""

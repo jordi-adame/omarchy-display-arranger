@@ -97,6 +97,7 @@ for (const [how, line] of [
     runApply(stub, ["wire"])
     assert.equal(fs.readFileSync(stub.monitorsLua, "utf8"), text)
     assert.deepEqual(backups(stub), [])
+    assert.equal(Model.requiresArrangement(text), true, "the popup's reader agrees: no offer")
   })
 }
 
@@ -106,6 +107,18 @@ test("a commented-out require line does not count: the line is appended", () => 
   runApply(stub, ["wire"])
   assert.equal(fs.readFileSync(stub.monitorsLua, "utf8"), text + APPENDED)
   assert.equal(backups(stub).length, 1)
+  assert.equal(Model.requiresArrangement(text), false, "the popup's reader agrees: the offer shows")
+})
+
+test("Model.requiresArrangement, the popup's reader, follows the fixtures and what wire appends", () => {
+  assert.equal(Model.requiresArrangement(MONITORS_LUA), false)
+  assert.equal(Model.requiresArrangement(WIRED), true)
+  assert.equal(Model.requiresArrangement(MONITORS_LUA + APPENDED), true)
+  assert.equal(Model.requiresArrangement(""), false)
+  assert.equal(Model.requiresArrangement(null), false)
+  // Another module, or the module name outside a require, is not wired.
+  assert.equal(Model.requiresArrangement(MONITORS_LUA + 'require("hypr.other")\n'), false)
+  assert.equal(Model.requiresArrangement(MONITORS_LUA + 'local name = "hypr.display-arrangement"\n'), false)
 })
 
 test("a file without a trailing newline gets one before the appended lines", () => {

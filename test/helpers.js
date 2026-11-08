@@ -6,7 +6,7 @@ const path = require("node:path")
 const { spawnSync } = require("node:child_process")
 
 const PLUGIN = path.resolve(__dirname, "..")
-// The tests run against the version folder the manifest loads (v1/ today).
+// The tests run against the version folder the manifest loads (v2/ today).
 const MANIFEST = JSON.parse(fs.readFileSync(path.join(PLUGIN, "manifest.json"), "utf8"))
 const VERSION_DIR = path.join(PLUGIN, path.dirname(MANIFEST.entryPoints.barWidget))
 const Model = require(path.join(VERSION_DIR, "Model.js"))

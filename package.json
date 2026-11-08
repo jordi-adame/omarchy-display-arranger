@@ -1,6 +1,6 @@
 {
   "name": "omarchy-display-arranger",
-  "version": "1.0.0",
+  "version": "1.1.0",
   "private": true,
   "description": "Omarchy bar plugin: pick your display arrangement from a grid of tiles",
   "license": "MIT",

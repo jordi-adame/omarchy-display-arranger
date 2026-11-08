@@ -375,6 +375,18 @@ function parseConfig(text) {
   return { locals: locals, rules: parseRules(lines, locals) }
 }
 
+// Whether monitors.lua already loads the arrangement file: the word require
+// then the module string, anywhere on a line, comments stripped. The same
+// test as apply.sh's requires_arrangement (and the same comment stripping, a
+// plain `--` to the end of the line), so the popup's consent notice and the
+// script never disagree.
+var REQUIRE_PATTERN = /\brequire\b[^"']*["']hypr\.display-arrangement["']/
+function requiresArrangement(text) {
+  return String(text || "").split("\n").some(function(line) {
+    return REQUIRE_PATTERN.test(line.replace(/--.*$/, ""))
+  })
+}
+
 // Hyprland's CMonitor::matchesStaticSelector.
 function matchesSelector(output, display) {
   if (output.slice(0, 5) === "desc:") {
@@ -1230,6 +1242,7 @@ if (typeof module !== "undefined") {
     parseMonitors: parseMonitors,
     liveSignature: liveSignature,
     parseConfig: parseConfig,
+    requiresArrangement: requiresArrangement,
     resolveDisplay: resolveDisplay,
     configuredDisplays: configuredDisplays,
     autoScale: autoScale,

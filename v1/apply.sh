@@ -3,41 +3,19 @@
 #
 #   apply.sh [--dry-run] apply <normal|laptop-off|mirror> <lua-text> <eval-expr> <eval-expr-lid-closed>
 #
-# The Lua text is the whole of ~/.config/hypr/display-arrangement.lua; the
-# eval expressions hold one hl.monitor call per connected display (only for
-# "normal"). All of them come from Model.js; nothing here builds Lua.
+# The Lua text is the whole of ~/.config/hypr/display-arrangement.lua and the
+# eval expressions hold one hl.monitor call per display; Model.js builds them,
+# nothing here builds Lua. After a successful write, wire_monitors_lua makes
+# monitors.lua require the file (once, after a backup).
 #
-# The file stores no scale, transform, mode or position: its loader
-# reads those from monitors.lua at config load. So the file written here is the
-# same whether or not Omarchy's mirror or laptop-off toggle is on at the click,
-# and writing it before the toggle is lifted (below) cannot persist a stale
-# state; it only saves one visible move (the reload the toggle command runs
-# applies the new file at once).
+# Dry run (prints what it would do, changes nothing): --dry-run,
+# DISPLAY_ARRANGER_DRY_RUN=1, or a file named DRY_RUN next to this script.
 #
-# After a successful write the script wires monitors.lua: when
-# ~/.config/hypr/monitors.lua exists and has no require of
-# hypr.display-arrangement, it copies it to monitors.lua.bak.<stamp> and
-# appends a comment plus require("hypr.display-arrangement") at the end, once,
-# atomically (tmp + mv). Hyprland reloads on that write and loads the file
-# from then on. A hand-written require line counts; a commented-out one does
-# not. A missing or read-only monitors.lua is left alone and the popup is told
-# (a "notice:" line on stdout). The wiring is logged and announced once with
-# notify-send.
+# DISPLAY_ARRANGER_POPUP_OPEN=1 refuses laptop-off and mirror: both take an
+# output away, and an Omarchy popup open on that output crashes the shell (see
+# the README). Panel.qml closes the popup first, then runs this script.
 #
-# Dry run (prints what it would run and write, changes nothing): pass
-# --dry-run, set DISPLAY_ARRANGER_DRY_RUN=1, or put a file named DRY_RUN next
-# to this script.
-#
-# The popup must be closed before laptop-off or mirror: both take
-# an output away, and while an Omarchy KeyboardPanel popup is open on the
-# output that goes, the shell re-creates the panel's dismiss twin on the dying
-# screen and crashes (see the README). Panel.qml closes the popup and waits for its
-# window to unmap before running this script for those modes, and tells it
-# through DISPLAY_ARRANGER_POPUP_OPEN. "1" refuses the output-removing modes
-# before anything is written or run; "normal" clicks are unaffected.
-#
-# Tests point the commands and paths elsewhere with the DISPLAY_ARRANGER_*
-# variables below.
+# Tests point the commands and paths elsewhere with the DISPLAY_ARRANGER_* variables.
 
 set -uo pipefail
 
@@ -56,9 +34,8 @@ DISABLE_FLAG="$TOGGLES_DIR/internal-monitor-disable.lua"
 MIRROR_FLAG="$TOGGLES_DIR/internal-monitor-mirror.lua"
 CLAMSHELL_FLAG="$TOGGLES_DIR/internal-monitor-clamshell.lua"
 
-# What wire_monitors_lua appends, and how it recognises a require of the file:
-# the word require, then the module name as a string, anywhere on a line once
-# comments are stripped (plain call, no parentheses, pcall, an assignment).
+# What wire_monitors_lua appends, and how it recognises an existing require:
+# the word require then the module string, anywhere on a line, comments stripped.
 REQUIRE_LINE='require("hypr.display-arrangement")'
 REQUIRE_COMMENT='-- Display arrangement from the jordi-adame.display-arranger bar widget. Keep this the last line.'
 REQUIRE_PATTERN='\brequire\b[^"'"'"']*["'"'"']hypr\.display-arrangement["'"'"']'
@@ -97,9 +74,8 @@ notice() {
   say "notice: $*"
 }
 
-# Runs an Omarchy toggle command, or in a dry run prints it. A refusal (the
-# command exits non-zero) fails the click, so the popup never reports success
-# while the toggle is still in place.
+# Runs an Omarchy toggle command, or in a dry run prints it. A refusal fails
+# the click, so the popup never reports success with the toggle still in place.
 run() {
   local out
   if (( dry_run )); then
@@ -140,12 +116,10 @@ write_target() {
   wire_monitors_lua
 }
 
-# Makes monitors.lua load the file written above: appends the require line
-# (with its comment) once, at the end, after a timestamped backup, through a
-# temp file renamed over the original. Idempotent: a monitors.lua that already
-# requires the file is never touched. A missing or read-only file is left
-# alone and the popup is told; this never fails the click, which has already
-# been applied live.
+# Makes monitors.lua load the file: appends the require line once, after a
+# timestamped backup, via tmp + mv. A file that already requires it is never
+# touched; a missing or read-only one is left alone and the popup is told.
+# Never fails the click, which has already been applied live.
 wire_monitors_lua() {
   local target="$MONITORS_LUA" dir stamp backup tmp
   if [[ ! -f $target ]]; then
@@ -219,11 +193,9 @@ apply_normal() {
   [[ -f $CLAMSHELL_FLAG && -n $expr_lid_closed ]] && expr="$expr_lid_closed"
 
   if [[ -f $MIRROR_FLAG || -f $DISABLE_FLAG ]]; then
-    # Omarchy's toggles load after this file and would win, so lift them.
-    # Each one reloads Hyprland synchronously, which applies the new file when
-    # monitors.lua requires it; the eval afterwards covers a monitors.lua that
-    # is not wired. The file holds no live state, so writing it first is safe
-    # and saves one visible move.
+    # Omarchy's toggles load after this file and would win, so lift them. Each
+    # reloads Hyprland synchronously; the eval after covers an unwired monitors.lua.
+    # The file holds no live state, so writing it first is safe and saves a move.
     write_target "$lua"
     [[ -f $MIRROR_FLAG ]] && run "$MIRROR_CMD" off
     [[ -f $DISABLE_FLAG ]] && run "$INTERNAL_CMD" on
@@ -241,9 +213,8 @@ apply_laptop_off() {
   write_target "$lua"
   # Omarchy refuses to turn the laptop off while mirroring.
   [[ -f $MIRROR_FLAG ]] && run "$MIRROR_CMD" off
-  # Omarchy's toggle reloads Hyprland (a no-op when the laptop is already
-  # off); the externals' rules are then evaled live, which also covers a
-  # monitors.lua that is not wired.
+  # The toggle reloads Hyprland (a no-op when the laptop is already off); the
+  # externals' rules are then evaled live, which also covers an unwired monitors.lua.
   [[ -f $DISABLE_FLAG ]] || run "$INTERNAL_CMD" off
   [[ -n $expr ]] && eval_live "$expr"
   return 0

@@ -1,27 +1,13 @@
 // Display arranger model: catalog of arrangements, position maths, current
-// arrangement detection, the configured-scale reader, and the Lua text for the
-// live eval and the persisted file. Plain JS so Node tests can load it
-// (module.exports at the bottom) and QML can import it ("Model.js" as Model).
-// No QML or Node APIs in here.
+// arrangement detection, the monitors.lua reader, display labels and captions,
+// and the Lua text for the live eval and the persisted file. Plain JS so Node
+// tests can load it (module.exports at the bottom) and QML can import it.
 //
-// What a tile rectangle shows is picked from the display's caption forms
-// (captionForms: label, compact label "Northwind 15″", brand; for a
-// duplicate, the forms with the serial tail, then "Northwind 0742", then
-// "0742") by fitCaption(), which TileGrid.qml and the tests share. The
-// three-character tag is never a caption: a unique display never shows its
-// serial.
-//
-// Display labels are brand plus diagonal inches ("Northwind 15.3″"), with the
-// serial tail only when two connected displays would read the same; see
-// labelsFor().
-//
-// The persisted file (format 2) stores no scale, transform or mode for any
-// display. Its loader reads them from ~/.config/hypr/monitors.lua
-// at config load and computes the positions from the logical sizes they give,
-// so a scale set with Omarchy's Display panel takes effect after a tile click,
-// and a click made while Omarchy's mirror or laptop-off toggle is on cannot
-// freeze the toggle's temporary scale into the file. The same reader runs here
-// (configuredDisplays) for the tile pictures and the live eval.
+// The persisted file (format 2) stores no scale, transform or mode: its loader
+// reads them from monitors.lua at config load, so a scale set in Omarchy's
+// Display panel takes effect after a tile click and a click made while a
+// mirror or laptop-off toggle is on cannot freeze the toggle's temporary scale.
+// configuredDisplays() is the same reader, for the tile pictures and the eval.
 
 var LAPTOP_NAME = /^(eDP|LVDS|DSI)-/
 // Hyprland stands in FALLBACK when nothing is enabled; a headless output is a
@@ -45,11 +31,9 @@ function isIntegral(x) {
   return x === Math.round(x)
 }
 
-// The scale Hyprland 0.56 ends up with for a requested scale: when the mode
-// does not divide into whole logical pixels it searches, in 1/120 steps, up
-// then down, for the nearest scale that does (Monitor.cpp, applyMonitorRule).
-// Omarchy's Display panel only offers clean scales, so this changes nothing
-// for them; it keeps the maths right for a hand-written scale like 1.3.
+// The scale Hyprland settles on: when the mode does not divide into whole
+// logical pixels it searches, in 1/120 steps, up then down, for the nearest
+// scale that does (Monitor.cpp, applyMonitorRule). Matters for a hand-written 1.3.
 function validScale(scale, width, height) {
   var s = Number(scale), w = Number(width), h = Number(height)
   if (!isFinite(s) || s <= 0 || !(w > 0 && h > 0)) return s
@@ -81,9 +65,8 @@ function tagFor(display, index) {
 
 // ---------- labels for displays ----------
 
-// Company suffixes that add nothing to a brand on a tile: "Northwind
-// Corporation" reads as "Northwind". Matched as whole trailing words, in any
-// order, case-insensitively, with or without a dot or a trailing comma.
+// Company suffixes dropped from a brand ("Northwind Corporation" reads as
+// "Northwind"): whole trailing words, any order, case-insensitive, dot or comma allowed.
 var BRAND_SUFFIX = /^(corporation|corp|inc|incorporated|co|company|ltd|limited|gmbh|ag|llc|plc|sa|srl|bv|nv|kg|pty|technologies|technology|electronics|electric|international)\.?,?$/i
 
 // The brand as shown on a tile: the make with its company suffixes removed.
@@ -135,13 +118,10 @@ function compactInchesText(inches) {
   return String(Math.round(inches)) + "\u2033"
 }
 
-// What a tile rectangle may show for a display, longest first: its label,
-// the compact label (brand plus whole inches), the brand. For a duplicate,
-// `suffix` is what the label ends with ("(0742)" or "A") and `tail` the bare
-// tail ("0742" or "A"): the label, the compact label with the suffix, the
-// brand plus the tail, the tail. The brand's place is taken by the model, or
-// the connector name, when the display has none. fitCaption() picks from
-// this list only, so the three-character tag never shows.
+// What a tile rectangle may show, longest first: the label, the compact label
+// (brand plus whole inches), the brand. For a duplicate (`suffix` "(0742)" or
+// "A", `tail` "0742" or "A"): the label, compact plus suffix, brand plus tail,
+// the tail. fitCaption() picks from this list only, so the tag never shows.
 function captionForms(display, label, suffix, tail) {
   var brand = shortBrand(display.make)
   var inches = diagonalInches(display.physicalWidth, display.physicalHeight)
@@ -159,12 +139,10 @@ function captionForms(display, label, suffix, tail) {
   return forms.filter(function(f, i) { return f !== "" && f !== forms[i - 1] })
 }
 
-// The caption for a rectangle `room` pixels across at `pixelSize`: the first
-// form that fits at that size; else the last form, at the largest size down
-// to `minPixelSize` at which it fits; else the last form at the minimum,
-// marked `elided` for the Text to elide ("View…"). measure(text, pixelSize)
-// returns the advance width in the caption font. Pure, so TileGrid.qml and
-// the tests share it.
+// The caption for a rectangle `room` pixels across: the first form that fits at
+// `pixelSize`; else the last form at the largest size down to `minPixelSize`
+// that fits; else the last form at the minimum, marked `elided`. measure(text,
+// pixelSize) returns the advance width. Pure, shared by TileGrid.qml and the tests.
 function fitCaption(forms, room, pixelSize, minPixelSize, measure) {
   var list = (forms || []).map(function(f) { return String(f || "") }).filter(function(f) { return f !== "" })
   if (list.length === 0) return { text: "", pixelSize: pixelSize, elided: false }
@@ -176,12 +154,9 @@ function fitCaption(forms, room, pixelSize, minPixelSize, measure) {
   return { text: last, pixelSize: Math.min(pixelSize, minPixelSize), elided: true }
 }
 
-// Labels for the connected displays: the laptop is "Laptop"; an external is
-// its base label, plus the last four serial characters in parentheses only
-// when another connected display gets the same base label ("Northwind 15.3″
-// (0742)"), or A, B, ... in connection order when a duplicate has no serial.
-// Returns { label, shortLabel, captions } per display, in the order given;
-// captions is the list captionForms() gives for the rectangles.
+// { label, shortLabel, captions } per display, in the order given. The laptop
+// is "Laptop"; an external is its base label plus "(last four serial chars)"
+// only when another display reads the same, or A, B, ... without a serial.
 function labelsFor(displays) {
   var bases = displays.map(function(d) { return d.isLaptop ? null : baseLabel(d) })
   var count = {}
@@ -203,10 +178,9 @@ function labelsFor(displays) {
   })
 }
 
-// Normalized displays, laptop first, externals in a stable order (by output
-// key) so tile order does not follow DP-n plug order. Scales and transforms
-// here are the live ones; configuredDisplays() replaces them with what
-// monitors.lua says.
+// Normalized displays, laptop first, externals sorted by output key so tile
+// order does not follow DP-n plug order. Scales and transforms are the live
+// ones here; configuredDisplays() replaces them with what monitors.lua says.
 function parseMonitors(raw) {
   var list = []
   try {
@@ -274,8 +248,7 @@ function parseMonitors(raw) {
   })
   displays.forEach(function(d) {
     // Externals by description (it carries the serial), so a layout follows the
-    // monitor, not the port. Two identical monitors without serials cannot be
-    // told apart that way; they fall back to the connector name.
+    // monitor, not the port; twins without serials fall back to the connector name.
     if (d.isLaptop) d.key = d.name
     else if (d.description && descCount[d.description] === 1) d.key = "desc:" + d.description
     else d.key = d.name
@@ -296,9 +269,8 @@ function parseMonitors(raw) {
   return laptop.concat(externals)
 }
 
-// What the tiles depend on in a `hyprctl monitors all -j` snapshot: the
-// parsed displays, without the volatile fields (focus, workspaces, dpms) that
-// change between polls while nothing about the layout does.
+// What the tiles depend on in a `hyprctl monitors all -j` snapshot: the parsed
+// displays, without the volatile fields (focus, workspaces, dpms).
 function liveSignature(raw) {
   return JSON.stringify(parseMonitors(raw))
 }
@@ -314,21 +286,14 @@ function externalsOf(displays) {
 
 // ---------- monitors.lua: the configured scale, transform and mode ----------
 //
-// This mirrors the Lua loader in the persisted file (LOADER below) and
-// Hyprland 0.56's own rules, verified in its source (MonitorRuleManager.cpp,
-// Monitor.cpp, lua/bindings/LuaBindingsConfigRules.cpp) and in a nested
-// instance:
-// - hl.monitor for an output string that already has a rule updates that rule
-//   (fields it does not name are kept) and moves it to the end of the list.
-// - The rule applied to a monitor is the last one in that list whose output
-//   is the monitor's connector name, or "desc:<prefix>" of its description.
-//   The catch-all rule (output = "") is used only when no rule matches, whatever
-//   its place in the file.
-// - A rule that names no scale means "auto": Hyprland picks a scale from the
-//   panel's size. That cannot be read from the file, so it counts as unknown.
-// Only one-line rules are read. A value in double or single quotes stands for
-// itself, a bare word may name a `local`, a number is a number; anything else
-// (an expression) is unknown.
+// Mirrors the Lua loader in the persisted file (LOADER below) and Hyprland's
+// rule precedence, verified in its source: rules for one output string merge
+// (a later hl.monitor keeps the fields it does not name) and rank at the last
+// call; a monitor takes the highest-ranked rule whose output is its connector
+// name or a "desc:" prefix of its description; the catch-all (output = "") only
+// when none matches. A rule without a scale means "auto", unreadable here, so
+// unknown. Only one-line rules are read; a quoted value stands for itself, a
+// bare word may name a `local`, a number is a number, anything else is unknown.
 
 function stripComments(line) {
   return String(line).replace(/--\[\[.*?\]\]/g, "").replace(/--.*$/, "")
@@ -366,10 +331,8 @@ function lastField(fields, name) {
   return last === undefined ? undefined : last.trim()
 }
 
-// One-line hl.monitor rules, merged by output string like Hyprland does. Each
-// entry: { output, rank, scale, transform, mode } where scale is a number,
-// null (auto, or not readable) or undefined (never named); transform an
-// integer or undefined; mode a string or undefined.
+// One-line hl.monitor rules merged by output string: { output, rank, scale,
+// transform, mode }; scale is a number, null (unreadable) or undefined (never named).
 function parseRules(lines, locals) {
   var rules = {}
   var rank = 0
@@ -439,10 +402,8 @@ function resolveDisplay(display, config) {
 }
 
 // Displays with the configured scale, transform and mode in place of the live
-// ones. With no readable scale, the live scale stands in for the tile
-// pictures and the eval when it is trustworthy (the display is on and not
-// mirroring), else 1; the file records it as that display's fallback_scale,
-// so the loader lands on the same positions (see fileText).
+// ones. With no readable scale the live scale stands in when trustworthy (on,
+// not mirroring), else 1; the file records it as fallback_scale (see fileText).
 function configuredDisplays(displays, monitorsLua) {
   var config = parseConfig(monitorsLua)
   return displays.map(function(d) {
@@ -481,13 +442,10 @@ function logicalSize(display, scale) {
 
 // ---------- catalog ----------
 
-// A tile spec names a kind and the output keys it orders. place() turns a
-// spec plus logical sizes into positions; the catalog, the eval, the tests and
-// the Lua loader in the persisted file (its own copy of place) all agree.
-//
-// Convention: the laptop sits at 0x0 whenever it is on, so it never jumps when
-// an external is unplugged; externals above or left get negative coordinates.
-// With the laptop off, the arrangement starts at 0x0.
+// A tile spec names a kind and the output keys it orders; place() turns it plus
+// logical sizes into positions. The Lua loader holds its own copy of place().
+// The laptop sits at 0x0 whenever it is on, so it never jumps when an external
+// is unplugged; with the laptop off the arrangement starts at 0x0.
 
 function half(n) {
   return Math.floor(n / 2)
@@ -546,9 +504,8 @@ function place(spec, sizes) {
     break
   case "above-left":
   case "above-right":
-    // One external above (centered), the other beside the laptop with top
-    // edges aligned. Centering the side one vertically would push it into the
-    // one above whenever it is taller than the laptop.
+    // One external above (centered), the other beside with top edges aligned:
+    // centered vertically it would push into the one above when taller than the laptop.
     a = spec.order[0]
     b = spec.order[1]
     p[L] = { x: 0, y: 0 }
@@ -558,9 +515,8 @@ function place(spec, sizes) {
   case "off":
   case "off-row":
   case "ext-row":
-    // Externals left to right from 0x0, centered on the first one. With a
-    // laptop present (laptop off) its rule is kept below the row, centered,
-    // for when Omarchy's laptop-off toggle is lifted.
+    // Externals left to right from 0x0, centered on the first; a laptop (off)
+    // keeps a rule below the row for when the toggle is lifted.
     keys = spec.order
     x = 0
     var first = sizes[keys[0]]
@@ -585,10 +541,8 @@ function place(spec, sizes) {
   return p
 }
 
-// Whether applying a tile of this mode takes an output away (Omarchy's
-// laptop-off disables the laptop panel; mirror turns the external into a
-// mirror, and Hyprland removes a mirror's wl_output too). The popup must be
-// closed before such a change: see Panel.qml and the README.
+// Whether a tile of this mode takes an output away (a mirror loses its
+// wl_output too). The popup must be closed first: see Panel.qml and the README.
 function removesOutput(mode) {
   return mode === "mirror" || mode === "laptop-off"
 }
@@ -841,9 +795,8 @@ function utf8Bytes(s) {
   return bytes
 }
 
-// A Lua string literal for any text: printable ASCII stays, quote and
-// backslash are escaped, everything else becomes \ddd. Monitor descriptions
-// come from EDID, so nothing in them may close the string.
+// A Lua string literal for any text: printable ASCII stays, quote and backslash
+// are escaped, the rest becomes \ddd. EDID descriptions must not close the string.
 function luaString(s) {
   var out = '"'
   utf8Bytes(String(s)).forEach(function(b) {
@@ -863,11 +816,8 @@ function ruleText(fields) {
   return "hl.monitor({ " + fields.join(", ") + " })"
 }
 
-// The rule fields the loader and the eval share for one display: the mode
-// monitors.lua names (else "preferred"), the position, the configured scale
-// when it is known (an unknown scale is left to Hyprland: an earlier rule for
-// the same output keeps its own, a new rule gets "auto"), the transform when
-// it is not 0.
+// The rule fields for one display: mode (else "preferred"), position, the
+// configured scale when known (unknown is left to Hyprland), transform when not 0.
 function ruleFields(display, pos) {
   var fields = [
     "output = " + luaString(display.key),
@@ -879,12 +829,10 @@ function ruleFields(display, pos) {
   return fields
 }
 
-// One hyprctl eval with an hl.monitor call for every connected display, at
-// the configured scales. Only used for "normal" tiles; laptop-off and mirror
-// go through Omarchy's own toggles (see apply.sh). With opts.keepLaptopState
-// the laptop rule leaves out `disabled = false`, so a laptop that Omarchy's
-// clamshell toggle turned off (lid shut while docked) stays off: hl.monitor
-// updates the existing rule and keeps what it does not name.
+// One hyprctl eval with an hl.monitor call per connected display. With
+// opts.keepLaptopState the laptop rule leaves out `disabled = false`, so a
+// laptop Omarchy's clamshell toggle turned off stays off (hl.monitor keeps
+// the fields it does not name).
 function evalExpression(tile, displays, opts) {
   opts = opts || {}
   var rules = []
@@ -901,12 +849,9 @@ function setKey(displays) {
   return displays.map(function(d) { return d.key }).sort().join(" + ")
 }
 
-// The loader below is fixed text, the same in every generated file. It is
-// the Lua twin of parseConfig/resolveDisplay/logicalSize/place above;
-// test/lua.test.js checks the two agree. It reads the laptop scale the way
-// Omarchy's omarchy-hyprland-monitor-clamshell does (the laptop's own rule in
-// monitors.lua, then the catch-all, then local omarchy_monitor_scale), so
-// both agree and the clamshell poll finds nothing to correct.
+// The loader: fixed text, the same in every generated file, the Lua twin of
+// parseConfig/resolveDisplay/logicalSize/place (test/lua.test.js checks they
+// agree). It reads the laptop scale like Omarchy's clamshell script does.
 var LOADER = [
   "-- Loader: fixed text, the same in every generated file. It reads each display's",
   "-- scale, transform and mode from monitors.lua (last matching rule wins, as in",
@@ -1134,13 +1079,10 @@ function luaTable(entries, indent) {
   return "{\n" + entries.map(function(e) { return indent + "  " + e + "," }).join("\n") + "\n" + indent + "}"
 }
 
-// Text of ~/.config/hypr/display-arrangement.lua for a tile: the arrangement
-// (kind and order) and, per display, its output key, connector name,
-// description and pixel size. No transform, mode or position is stored, and a
-// scale only as the fallback for a display monitors.lua gives none; the loader
-// derives the rest at config load. `sets` is keyed by the connected
-// set so per-set memory can keep several entries later; today the file holds
-// only the last click.
+// Text of display-arrangement.lua for a tile: the arrangement and, per display,
+// output key, connector, description and pixel size (plus fallback_scale when
+// monitors.lua gives none). `sets` is keyed by the connected set so per-set
+// memory can keep several entries later; today it holds the last click.
 function fileText(tile, displays, opts) {
   opts = opts || {}
   var laptop = laptopOf(displays)

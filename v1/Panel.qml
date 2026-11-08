@@ -7,24 +7,15 @@ import qs.Ui
 import "Model.js" as Model
 
 // Bar icon with a popup of arrangement tiles, one per arrangement possible
-// with the displays connected now. A tile click applies the arrangement live
-// and persists it to ~/.config/hypr/display-arrangement.lua through apply.sh
-// (which also holds the dry-run path). The highlighted tile is read from
-// `hyprctl monitors all -j`, never from the file, so it always shows what
-// Hyprland runs now. Sizes come from the scales monitors.lua configures
-// (read on every refresh), not from the live scales, so a mirror or
-// laptop-off toggle cannot distort the tiles or the plan.
+// with the displays connected now. A click applies the arrangement live and
+// persists it through apply.sh. The highlighted tile is read from
+// `hyprctl monitors all -j`, never from the file; tile sizes use the scales
+// monitors.lua configures, not the live ones, so a toggle cannot distort them.
 //
-// Mirror and laptop-off take an output away. While this popup is open,
-// Omarchy's KeyboardPanel keeps a transparent "dismiss twin" window on every
-// other output; when the output under the popup goes, Qt moves the popup
-// window to the surviving output, the twin for the vanished output is made
-// visible again and Quickshell re-creates it on the screen Qt is deleting.
-// That window comes back as a plain xdg toplevel and Qt crashes on its first
-// configure (QWaylandWindow::setGeometry, null screen; see the README). So those
-// two tiles close the popup first and run the toggle only once the popup
-// window has unmapped. Arrangement changes that keep every output (the other
-// tiles) run at once, as before.
+// Mirror and laptop-off take an output away, and an Omarchy KeyboardPanel open
+// on the output that goes crashes the shell (Quickshell re-creates its dismiss
+// window on the dying screen; see the README). Those two tiles close the popup
+// and run only once its window has unmapped.
 Panel {
   id: root
   moduleName: "jordi-adame.display-arranger"
@@ -32,8 +23,7 @@ Panel {
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 
-  // Translator for Model.js and the texts below: the catalog string, or the
-  // English default when no catalog has the key.
+  // Translator for Model.js and the texts below; the English default when no catalog has the key.
   function tr(key, english) {
     return strings.t(key, english)
   }
@@ -129,9 +119,8 @@ Panel {
     runPlan(plan)
   }
 
-  // The fade-out is 120 ms; a window that has not unmapped after this long
-  // no longer protects anything (the popup has been closed for a second, so
-  // the twins are gone), and the plan runs.
+  // The fade-out is 120 ms; after a second the dismiss windows are long gone
+  // whatever the backing window reports, and the plan runs.
   Timer {
     id: deferTimeout
     interval: 1000
@@ -168,9 +157,8 @@ Panel {
     onTriggered: root.refresh()
   }
 
-  // monitors.lua first, so the displays are built from the current scales
-  // when the monitor snapshot lands. A missing file gives empty text, and the
-  // model then uses the live scales (see Model.configuredDisplays).
+  // monitors.lua first, so the displays are built from the current scales when
+  // the snapshot lands. A missing file gives empty text and the live scales stand in.
   Process {
     id: monitorsLuaProc
     command: ["cat", "--", root.monitorsLuaPath]
@@ -187,8 +175,8 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
-        // Only a change in what the tiles depend on rebuilds them: the raw
-        // text also carries focus and workspace fields that change between polls.
+        // The raw text also carries focus and workspace fields that change
+        // between polls; only a change the tiles depend on rebuilds them.
         var raw = String(text || "").trim()
         if (raw === "") return
         var signature = Model.liveSignature(raw)
@@ -236,15 +224,9 @@ Panel {
     bar: root.bar
     open: root.opened
     focusTarget: keyCatcher
-    // Style.space(500): 583 px at shell base-size 14 (a 547 px grid), between
-    // Omarchy's weather (480) and clock (560) popups. At 400 (a 431 px grid)
-    // the external's rectangle in the above, left, right and below tiles is
-    // 50x27 and a nine-letter brand shrinks to 8 px there. At 500 those
-    // rectangles are 65x36 and the brand shows at 11 px (12 at laptop scale
-    // 1.25), never elided; see test/captions.test.js.
-    // fittedContentWidth clamps to the screen minus the margins, so a narrow
-    // screen gets a narrower card and the grid reflows (TileGrid follows the
-    // column width).
+    // Style.space(500): 583 px at shell base-size 14, so the external's
+    // rectangle in the one-external tiles fits a nine-letter brand at 11 px
+    // (test/captions.test.js). fittedContentWidth clamps to the screen.
     contentWidth: panel.fittedContentWidth(Style.space(500))
     contentHeight: panel.fittedContentHeight(column.implicitHeight)
 

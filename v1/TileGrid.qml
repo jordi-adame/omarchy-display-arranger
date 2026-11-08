@@ -3,26 +3,18 @@ pragma ComponentBehavior: Bound
 import QtQuick
 import "Model.js" as Model
 
-// Grid of arrangement tiles. Plain QtQuick (plus the plain-JS Model.js for
-// the caption fit) so the preview harness can render it without the Omarchy
-// shell; Panel.qml passes the theme in.
+// Grid of arrangement tiles. Plain QtQuick plus Model.js, so the preview tool
+// renders it without the Omarchy shell; Panel.qml passes the theme in.
 //
-// Each tile pictures its arrangement: every display as a rectangle at its
-// logical size and relative position. The laptop is filled and carries a
-// laptop glyph; externals are outlined and carry the longest of their
-// caption forms that fits (Model.captionForms: "Northwind 15.3″", then
-// "Northwind 15″", then "Northwind"; with the serial tail only when two
-// displays read the same: "Northwind 0742", then "0742"), the last form
-// shrunk to Model.CAPTION_MIN_PX and then elided ("View…") when even that
-// does not fit. The serial tag is never a caption. Hovering a rectangle
-// shows its full label in the tooltip Panel.qml supplies. The tile for the
-// arrangement on screen now has an accent border and fill.
+// Each tile pictures its arrangement: one rectangle per display at its logical
+// size and relative position. The laptop is filled with a glyph; an external is
+// outlined with the longest of its caption forms that fits (Model.fitCaption),
+// shrunk then elided when none does. Hovering a rectangle shows the full label.
 Item {
   id: grid
 
   property var tiles: []
-  // Component for a hover tooltip over a display rectangle (Omarchy's
-  // PanelToolTip); null leaves the rectangles without one.
+  // Hover tooltip for a display rectangle (Omarchy's PanelToolTip); null for none.
   property Component tooltipComponent: null
   property string currentId: ""
   property int cursorIndex: -1
@@ -108,10 +100,8 @@ Item {
               ? grid.tint(tile.current ? grid.accent : grid.foreground, 0.9)
               : grid.tint(grid.foreground, 0.7)
 
-            // The caption: the first of the display's caption forms that fits
-            // the rectangle at the caption size, measured in the caption's
-            // font (widths at smaller sizes scaled from the measured one);
-            // else the last form, which the Text below shrinks and elides.
+            // The first caption form that fits at the caption size, measured in
+            // its font; else the last form, which the Text below shrinks and elides.
             readonly property int captionSize: Math.max(7, Math.min(14, Math.round(height * 0.42)))
             readonly property real captionRoom: Math.max(0, width - 4)
             readonly property var captionFit: {
@@ -155,8 +145,7 @@ Item {
               font.family: grid.fontFamily
               font.pixelSize: screenRect.captionSize
               font.bold: !screenRect.modelData.laptop
-              // A caption that does not fit at the caption size shrinks to
-              // the minimum, then is elided ("View…"); the glyph never does.
+              // A caption shrinks to the minimum, then is elided; the glyph never does.
               fontSizeMode: screenRect.modelData.laptop ? Text.FixedSize : Text.HorizontalFit
               minimumPixelSize: Model.CAPTION_MIN_PX
               elide: screenRect.modelData.laptop ? Text.ElideNone : Text.ElideRight
@@ -164,8 +153,7 @@ Item {
 
             Text {
               objectName: "overlay"
-              // The mirrored external shows its caption in its visible top
-              // band, right-aligned, with the same fit order.
+              // The mirrored external's caption, in its visible top band.
               visible: screenRect.modelData.mirror
               anchors.right: parent.right
               anchors.top: parent.top

@@ -81,8 +81,8 @@ So these two tiles close the popup, wait for it to unmap, then run.
 ## Dry run
 
 An empty file named `DRY_RUN` next to the installed `apply.sh`
-(`~/.config/omarchy/plugins/jordi-adame.display-arranger/v1/DRY_RUN`) makes
+(`~/.config/omarchy/plugins/jordi-adame.display-arranger/v2/DRY_RUN`) makes
 clicks log what they would do without changing anything.
 
-Strings are English only (`v1/i18n/en.json`); translations welcome. See
+Strings are English only (`v2/i18n/en.json`); translations welcome. See
 [CONTRIBUTING.md](CONTRIBUTING.md). License: [MIT](LICENSE).

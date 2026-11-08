@@ -1,8 +1,8 @@
 # omarchy-display-arranger
 
 An [Omarchy](https://omarchy.org) bar widget: a popup with one tile per
-arrangement of the displays connected now. Click a tile and it is applied live
-and kept across reloads and reboots.
+arrangement of the displays connected now. Click a tile and it is applied live;
+say yes once and it is kept across reloads and reboots.
 
 ![One external: above, left, right, below, external only, mirror](screenshots/one-external.png)
 
@@ -29,7 +29,7 @@ Uninstall in this order; Hyprland reports a config error if the `require` line
 outlives the file it loads.
 
 1. If a laptop-off or mirror tile is active, click an extended tile first.
-2. Remove the two lines the plugin added to `monitors.lua`:
+2. If you said yes to the popup, remove the two lines it added to `monitors.lua`:
 
    ```bash
    sed -i -e '/^-- Display arrangement from the jordi-adame.display-arranger bar widget/d' \
@@ -41,12 +41,12 @@ outlives the file it loads.
 
 ## How a click is kept
 
-A click writes `~/.config/hypr/display-arrangement.lua` (tmp + rename) and, the
-first time, appends `require("hypr.display-arrangement")` with a comment to the
-end of `monitors.lua`, after copying it to `monitors.lua.bak.<stamp>`. A
-`monitors.lua` that already has the line, is missing or is read-only is left
-alone, and the popup says so. Actions are logged to
-`~/.local/state/display-arranger/apply.log`.
+A click writes `~/.config/hypr/display-arrangement.lua` (tmp + rename), never
+`monitors.lua`. While that file lacks `require("hypr.display-arrangement")`,
+the popup asks "Keep layouts after reloads?": Yes appends the line and a
+comment at its end after a copy to `monitors.lua.bak.<stamp>`; Not now asks
+again on the next open. A missing or read-only `monitors.lua` is left alone,
+and the popup says why. Actions are logged to `~/.local/state/display-arranger/apply.log`.
 
 The file stores only the arrangement and the displays (by description, so it
 follows the monitor, not the port). Scale, mode and transform are read from
@@ -82,7 +82,7 @@ So these two tiles close the popup, wait for it to unmap, then run.
 
 An empty file named `DRY_RUN` next to the installed `apply.sh`
 (`~/.config/omarchy/plugins/jordi-adame.display-arranger/v2/DRY_RUN`) makes
-clicks log what they would do without changing anything.
+clicks and Yes log what they would do without changing anything.
 
 Strings are English only (`v2/i18n/en.json`); translations welcome. See
 [CONTRIBUTING.md](CONTRIBUTING.md). License: [MIT](LICENSE).

@@ -3,7 +3,7 @@
 ## Layout
 
 - `manifest.json`: the Omarchy plugin manifest; `entryPoints.barWidget` names the version folder the shell loads.
-- `v2/`: `Panel.qml` (bar icon, popup, keys), `TileGrid.qml` (the tiles), `Model.js` (catalog, positions, the `monitors.lua` reader, the Lua text), `apply.sh` (applies a click, wires `monitors.lua`, dry run), `i18n/en.json` (strings).
+- `v2/`: `Panel.qml` (bar icon, popup, keys), `TileGrid.qml` (the tiles), `Model.js` (catalog, positions, the `monitors.lua` reader, the Lua text), `apply.sh` (applies a click; wires `monitors.lua` when the popup's notice is answered Yes; dry run), `i18n/en.json` (strings).
 - `test/`: `node --test` suites, the stub Lua runner, made-up fixtures.
 - `tools/`: `render-preview.js` (screenshots) and `measure-font-widths.js` (the font fixture), Qt offscreen only.
 
@@ -11,7 +11,7 @@
 
 ```bash
 mkdir -p .scratch
-TMPDIR=$PWD/.scratch node --test                          # 186 tests
+TMPDIR=$PWD/.scratch node --test                          # 201 tests
 omarchy plugin validate .
 /usr/lib/qt6/bin/qmllint v2/TileGrid.qml v2/Panel.qml     # qs.* import warnings are expected
 bash -n v2/apply.sh

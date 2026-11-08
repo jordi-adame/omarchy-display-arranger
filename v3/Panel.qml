@@ -24,8 +24,8 @@ import "Model.js" as Model
 // and run only once its window has unmapped.
 Panel {
   id: root
-  moduleName: "jordi-adame.display-arranger"
-  ipcTarget: "jordi-adame.display-arranger"
+  moduleName: "io.github.jordi-adame.display-arranger"
+  ipcTarget: "io.github.jordi-adame.display-arranger"
 
   Commons.Translations { id: strings; directory: Qt.resolvedUrl("i18n") }
 

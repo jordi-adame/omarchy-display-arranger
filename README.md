@@ -21,9 +21,11 @@ displays are told apart by the last four characters of their serials.
 
 ```bash
 omarchy plugin add https://github.com/jordi-adame/omarchy-display-arranger.git --enable
-omarchy plugin enable jordi-adame.display-arranger --section right --after omarchy.monitor   # optional: next to the Display icon
-omarchy plugin update jordi-adame.display-arranger
+omarchy plugin enable io.github.jordi-adame.display-arranger --section right --after omarchy.monitor   # optional: next to the Display icon
+omarchy plugin update io.github.jordi-adame.display-arranger
 ```
+
+Updating from 1.0 or 1.1: the id changed, so run `omarchy plugin remove jordi-adame.display-arranger`, then `omarchy plugin add https://github.com/jordi-adame/omarchy-display-arranger.git --enable`.
 
 Uninstall in this order; Hyprland reports a config error if the `require` line
 outlives the file it loads.
@@ -32,12 +34,12 @@ outlives the file it loads.
 2. If you said yes to the popup, remove the two lines it added to `monitors.lua`:
 
    ```bash
-   sed -i -e '/^-- Display arrangement from the jordi-adame.display-arranger bar widget/d' \
+   sed -i -e '/^-- Display arrangement from the .*display-arranger bar widget/d' \
           -e '/^require("hypr.display-arrangement")$/d' ~/.config/hypr/monitors.lua
    ```
 
 3. `rm -f ~/.config/hypr/display-arrangement.lua`
-4. `omarchy plugin remove jordi-adame.display-arranger`
+4. `omarchy plugin remove io.github.jordi-adame.display-arranger`
 
 ## How a click is kept
 
@@ -81,8 +83,8 @@ So these two tiles close the popup, wait for it to unmap, then run.
 ## Dry run
 
 An empty file named `DRY_RUN` next to the installed `apply.sh`
-(`~/.config/omarchy/plugins/jordi-adame.display-arranger/v2/DRY_RUN`) makes
+(`~/.config/omarchy/plugins/io.github.jordi-adame.display-arranger/v3/DRY_RUN`) makes
 clicks and Yes log what they would do without changing anything.
 
-Strings are English only (`v2/i18n/en.json`); translations welcome. See
+Strings are English only (`v3/i18n/en.json`); translations welcome. See
 [CONTRIBUTING.md](CONTRIBUTING.md). License: [MIT](LICENSE).

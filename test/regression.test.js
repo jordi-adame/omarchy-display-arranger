@@ -158,7 +158,7 @@ test("mirror on while the Display panel has set 1x: leaving mirror restores 1x a
 const AUTO_DEFAULT = 'local omarchy_gdk_scale = 1\nlocal omarchy_monitor_scale = "auto"\n' +
   'hl.env("GDK_SCALE", tostring(omarchy_gdk_scale))\n' +
   'hl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy_monitor_scale })\n' +
-  '\n-- Display arrangement from the jordi-adame.display-arranger bar widget. Keep this the last line.\nrequire("hypr.display-arrangement")\n'
+  '\n-- Display arrangement from the io.github.jordi-adame.display-arranger bar widget. Keep this the last line.\nrequire("hypr.display-arrangement")\n'
 const SNAP_AUTO_ABOVE = () => [laptop({ scale: 1.5, x: 0, y: 0 }), northwind("DEMO00000742", { scale: 2, x: -320, y: -1080 })]
 
 // "above" at the auto scales: the external (1920x1080 logical) centered over a 1280x800 laptop.

@@ -8,7 +8,7 @@ local omarchy_monitor_scale = 1
 
 hl.env("GDK_SCALE", tostring(omarchy_gdk_scale))
 
--- Laptop panel at the origin (0x0), like the jordi-adame.display-arranger bar widget: external
+-- Laptop panel at the origin (0x0), like the io.github.jordi-adame.display-arranger bar widget: external
 -- Northwind 4K (serial DEMO00000742) centered above the panel; second external Northwind 4K
 -- (serial DEMO00000519) right of the panel, top edges aligned.
 -- Matched by serial, not DP-1/DP-2: those names follow port and plug order.
@@ -39,5 +39,5 @@ hl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy
 -- Omarchy's clamshell script reads its position (0x0) and scale back from here.
 hl.monitor({ output = "eDP-1", mode = "preferred", position = "0x0", scale = omarchy_monitor_scale })
 
--- Display arrangement from the jordi-adame.display-arranger bar widget. Keep this the last line.
+-- Display arrangement from the io.github.jordi-adame.display-arranger bar widget. Keep this the last line.
 require("hypr.display-arrangement")

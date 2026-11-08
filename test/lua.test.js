@@ -31,7 +31,7 @@ test("generated file parses (luac -p)", () => {
 
 test("generated file: format 2 stores the arrangement and the displays, no scale, mode or position", () => {
   const text = fileFor(one, "above")
-  assert.match(text, /^-- Display arrangement, written by the jordi-adame\.display-arranger bar widget\./)
+  assert.match(text, /^-- Display arrangement, written by the io\.github\.jordi-adame\.display-arranger bar widget\./)
   assert.match(text, /-- display-arranger-format: 2\n/)
   assert.match(text, /-- written: 2026-11-07T22:00:00Z\n/)
   assert.ok(text.includes(`local last = "${KEY_742} + eDP-1"`))

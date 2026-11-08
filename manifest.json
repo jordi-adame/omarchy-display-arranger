@@ -1,15 +1,15 @@
 {
   "schemaVersion": 1,
-  "id": "jordi-adame.display-arranger",
+  "id": "io.github.jordi-adame.display-arranger",
   "name": "Display arranger",
-  "version": "1.1.0",
+  "version": "1.2.0",
   "author": "Jordi Adame",
   "description": "Pick the display arrangement from a grid of tiles.",
   "kinds": [
     "bar-widget"
   ],
   "entryPoints": {
-    "barWidget": "v2/Panel.qml"
+    "barWidget": "v3/Panel.qml"
   },
   "barWidget": {
     "displayName": "Display arranger",

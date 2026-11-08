@@ -401,20 +401,47 @@ function resolveDisplay(display, config) {
   return { scale: scale, transform: transform, mode: mode, rule: base ? base.output : null }
 }
 
+// Hyprland's automatic scale for a display whose rule names none
+// (src/output/Monitor.cpp, CMonitor::getDefaultScale, v0.56.2): PPI from the
+// mode's pixel size and the physical size in mm; above 200 gives 2, above 140
+// gives 1.5, else 1. null without a physical size (Hyprland divides by zero
+// there and lands on 2; a caller falls back to a recorded value instead).
+function autoScale(display) {
+  var px = modePixels(display)
+  var wmm = Number(display.physicalWidth), hmm = Number(display.physicalHeight)
+  if (!(wmm > 0 && hmm > 0) || !(px.w > 0 && px.h > 0)) return null
+  var diagonalPx = Math.sqrt(px.w * px.w + px.h * px.h)
+  var diagonalIn = Math.sqrt(Math.pow(wmm / 25.4, 2) + Math.pow(hmm / 25.4, 2))
+  var ppi = diagonalPx / diagonalIn
+  if (ppi > 200) return 2
+  if (ppi > 140) return 1.5
+  return 1
+}
+
 // Displays with the configured scale, transform and mode in place of the live
-// ones. With no readable scale the live scale stands in when trustworthy (on,
-// not mirroring), else 1; the file records it as fallback_scale (see fileText).
-function configuredDisplays(displays, monitorsLua) {
+// ones. With no readable scale, fallbackScale stands in and is recorded in
+// the file (see fileText): the live scale when trustworthy (on, not
+// mirroring; a toggle's temporary scale never is), else Hyprland's auto scale,
+// else the previous file's fallback for that output (previousFallbacks, from
+// parseFallbackScales), else nothing, and the maths use 1.
+function configuredDisplays(displays, monitorsLua, previousFallbacks) {
   var config = parseConfig(monitorsLua)
+  var previous = previousFallbacks || {}
   return displays.map(function(d) {
     var r = resolveDisplay(d, config)
     var out = {}
     Object.keys(d).forEach(function(k) { out[k] = d[k] })
-    out.scaleKnown = r.scale !== null
-    out.scale = r.scale !== null ? r.scale : (!d.disabled && d.mirrorOf === "none" ? d.liveScale : 1)
     out.transform = r.transform
     out.modeText = r.mode
     out.rule = r.rule
+    out.scaleKnown = r.scale !== null
+    var fallback = null
+    if (!out.scaleKnown) {
+      fallback = !d.disabled && d.mirrorOf === "none" ? d.liveScale : autoScale(out)
+      if (fallback === null && typeof previous[d.key] === "number" && previous[d.key] > 0) fallback = previous[d.key]
+    }
+    out.fallbackScale = fallback
+    out.scale = out.scaleKnown ? r.scale : (fallback !== null ? fallback : 1)
     return out
   })
 }
@@ -808,6 +835,40 @@ function luaString(s) {
   return out + '"'
 }
 
+// Bytes of a luaString() literal body back to text (\", \\ and \ddd, UTF-8).
+function luaUnstring(body) {
+  var bytes = []
+  for (var i = 0; i < body.length; i++) {
+    var c = body.charAt(i)
+    if (c !== "\\") { bytes.push(body.charCodeAt(i)); continue }
+    var ddd = /^\d{3}/.exec(body.slice(i + 1, i + 4))
+    if (ddd) { bytes.push(Number(ddd[0])); i += 3 } else { bytes.push(body.charCodeAt(i + 1)); i++ }
+  }
+  var out = "", j = 0
+  while (j < bytes.length) {
+    var b = bytes[j]
+    var n = b < 0x80 ? 0 : (b < 0xe0 ? 1 : (b < 0xf0 ? 2 : 3))
+    var cp = n === 0 ? b : (n === 1 ? b & 31 : (n === 2 ? b & 15 : b & 7))
+    for (var k = 1; k <= n; k++) cp = (cp << 6) | (bytes[j + k] & 63)
+    out += String.fromCodePoint(cp)
+    j += n + 1
+  }
+  return out
+}
+
+// The fallback_scale recorded per output key in a display-arrangement.lua
+// written by an earlier click (the whole file text), for configuredDisplays.
+function parseFallbackScales(text) {
+  var out = {}
+  var re = /\{\s*output\s*=\s*"((?:[^"\\]|\\.)*)"[^\n]*?\bfallback_scale\s*=\s*([0-9.]+)/g
+  var m
+  while ((m = re.exec(String(text || ""))) !== null) {
+    var n = Number(m[2])
+    if (isFinite(n) && n > 0) out[luaUnstring(m[1])] = n
+  }
+  return out
+}
+
 function positionText(pos) {
   return pos.x + "x" + pos.y
 }
@@ -1098,9 +1159,9 @@ function fileText(tile, displays, opts) {
       "height = " + px.h
     ]
     if (d.isLaptop) fields.push("laptop = true")
-    // Only when monitors.lua gives this display no scale: what it ran at when
-    // clicked, so the loader's positions match the eval's.
-    if (!d.scaleKnown) fields.push("fallback_scale = " + scaleKey(d.scale))
+    // Only when monitors.lua gives this display no scale: the scale the maths
+    // used (see configuredDisplays), so the loader's positions match the eval's.
+    if (!d.scaleKnown && typeof d.fallbackScale === "number") fields.push("fallback_scale = " + scaleKey(d.fallbackScale))
     return "{ " + fields.join(", ") + " }"
   })
 
@@ -1171,6 +1232,8 @@ if (typeof module !== "undefined") {
     parseConfig: parseConfig,
     resolveDisplay: resolveDisplay,
     configuredDisplays: configuredDisplays,
+    autoScale: autoScale,
+    parseFallbackScales: parseFallbackScales,
     logicalSize: logicalSize,
     place: place,
     specs: specs,

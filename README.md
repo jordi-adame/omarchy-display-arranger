@@ -59,7 +59,7 @@ name fall back to their `monitors.lua` rules.
 
 ## Known limits
 
-- An Omarchy scale of `"auto"` (the default for the laptop) cannot be read from `monitors.lua`; the plugin uses the scale the display runs at when you click and records it in the file as a fallback. Pick a scale in the Display panel to pin it.
+- An Omarchy scale of `"auto"` (the default for the laptop) cannot be read from `monitors.lua`; the plugin uses the scale the display runs at when you click (Hyprland's own automatic scale for a display that is off or mirrored at that moment) and records it in the file as a fallback. Pick a scale in the Display panel to pin it.
 - More than two external displays: no tiles.
 - Last click only can leave an off-center position after unplugging a display, until the next click.
 - The two-external tiles are tested less than the one-external ones.

@@ -31,11 +31,15 @@ Panel {
   readonly property string scriptPath: decodeURIComponent(String(Qt.resolvedUrl("apply.sh")).replace(/^file:\/\//, ""))
 
   readonly property string monitorsLuaPath: Quickshell.env("HOME") + "/.config/hypr/monitors.lua"
+  readonly property string arrangementPath: Quickshell.env("HOME") + "/.config/hypr/display-arrangement.lua"
 
   property string monitorsJson: "[]"
   property string monitorsSignature: ""
   property string monitorsLuaText: ""
-  readonly property var displays: Model.configuredDisplays(Model.parseMonitors(monitorsJson), monitorsLuaText)
+  // The previous click's file: its fallback scales serve a display whose scale
+  // cannot be read or computed (see Model.configuredDisplays).
+  property string arrangementText: ""
+  readonly property var displays: Model.configuredDisplays(Model.parseMonitors(monitorsJson), monitorsLuaText, Model.parseFallbackScales(arrangementText))
   readonly property var tiles: Model.catalog(displays, root.tr)
   readonly property string currentId: Model.currentTileId(tiles, displays)
   readonly property string emptyReason: Model.emptyReason(displays)
@@ -55,6 +59,7 @@ Panel {
 
   function refresh() {
     if (!monitorsLuaProc.running) monitorsLuaProc.running = true
+    if (!arrangementProc.running) arrangementProc.running = true
     if (!monitorsProc.running) monitorsProc.running = true
   }
 
@@ -165,6 +170,16 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: root.monitorsLuaText = String(text || "")
+    }
+    stderr: StdioCollector { waitForEnd: true }
+  }
+
+  Process {
+    id: arrangementProc
+    command: ["cat", "--", root.arrangementPath]
+    stdout: StdioCollector {
+      waitForEnd: true
+      onStreamFinished: root.arrangementText = String(text || "")
     }
     stderr: StdioCollector { waitForEnd: true }
   }

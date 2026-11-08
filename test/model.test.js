@@ -75,6 +75,44 @@ test("liveSignature: the same for snapshots that differ only in volatile fields,
   assert.equal(Model.liveSignature("not json"), Model.liveSignature("[]"))
 })
 
+test("autoScale: Hyprland's PPI thresholds from the mode and the physical size", () => {
+  const ext = displays([northwind("DEMO00000742")])[0]
+  assert.equal(Model.autoScale(ext), 2, "4K on 340x190 mm: 287 PPI")
+  assert.equal(Model.autoScale(displays([laptop()])[0]), 1.5, "1920x1200 on 300x190 mm: 162 PPI")
+  assert.equal(Model.autoScale(displays([northwind("DEMO00000742", { width: 2560, height: 1440, physicalWidth: 600, physicalHeight: 340 })])[0]), 1, "27-inch 1440p: 108 PPI")
+  assert.equal(Model.autoScale(displays([northwind("DEMO00000742", { physicalWidth: 0, physicalHeight: 0 })])[0]), null)
+  assert.equal(Model.autoScale(displays([northwind("DEMO00000742", { physicalWidth: 340, physicalHeight: 0 })])[0]), null)
+  // A literal mode in monitors.lua is what Hyprland runs, so it is what counts.
+  const lowMode = configured([northwind("DEMO00000742")], 'hl.monitor({ output = "", mode = "1920x1080@60", position = "auto", scale = "auto" })\n')[0]
+  assert.equal(Model.autoScale(lowMode), 1.5, "1080p on the same 15-inch panel: 144 PPI, above 140")
+})
+
+test("configured: an unknown scale with an untrustworthy live scale uses Hyprland's auto scale, then the previous fallback, then 1", () => {
+  const auto = 'local omarchy_monitor_scale = "auto"\nhl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy_monitor_scale })\n'
+  const mirrored = one({ scale: 1.5 }, { scale: 1, mirrorOf: "eDP-1" }, auto)
+  assert.deepEqual(mirrored.map((x) => [x.scale, x.scaleKnown, x.fallbackScale]), [[1.5, false, 1.5], [2, false, 2]])
+  const off = one({ scale: 1, disabled: true, width: 0, height: 0 }, {}, auto)
+  assert.deepEqual([off[0].scale, off[0].fallbackScale], [1.5, 1.5], "the disabled laptop at its auto 1.5")
+  const noSize = one({ scale: 1.5 }, { scale: 1, mirrorOf: "eDP-1", physicalWidth: 0, physicalHeight: 0 }, auto)
+  assert.deepEqual([noSize[1].scale, noSize[1].fallbackScale], [1, null], "nothing to go on: 1 for the maths, nothing recorded")
+  const previous = configured([laptop({ scale: 1.5 }), northwind("DEMO00000742", { scale: 1, mirrorOf: "eDP-1", physicalWidth: 0, physicalHeight: 0 })], auto, { [KEY_742]: 2 })
+  assert.deepEqual([previous[1].scale, previous[1].fallbackScale], [2, 2], "the previous file's fallback")
+  // A known scale never records a fallback, whatever the live state.
+  assert.deepEqual(one({}, { scale: 1, mirrorOf: "eDP-1" }).map((x) => x.fallbackScale), [null, null])
+})
+
+test("parseFallbackScales: reads the fallback_scale per output key back from a generated file, escapes included", () => {
+  const auto = 'local omarchy_monitor_scale = "auto"\nhl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy_monitor_scale })\n'
+  const odd = { name: "DP-3", description: 'Écran "4K" \\ ü', serial: "S1", make: "Acme", model: "X", physicalWidth: 600, physicalHeight: 340, width: 3840, height: 2160, refreshRate: 60, scale: 1.5 }
+  const d = configured([laptop({ scale: 1.5 }), odd], auto)
+  const text = Model.fileText(Model.catalog(d)[0], d)
+  assert.deepEqual(Model.parseFallbackScales(text), { "eDP-1": 1.5, ["desc:" + odd.description]: 1.5 })
+  assert.deepEqual(Model.parseFallbackScales(""), {})
+  assert.deepEqual(Model.parseFallbackScales("not a file"), {})
+  const known = Model.fileText(Model.catalog(one())[0], one())
+  assert.deepEqual(Model.parseFallbackScales(known), {}, "no fallbacks when every scale is configured")
+})
+
 // ---------- monitors.lua ----------
 
 test("configured: the wired file gives the laptop its local scale and the Northwind its desc: rule", () => {
@@ -110,14 +148,15 @@ test("configured: rules for one output merge like Hyprland's hl.monitor", () => 
   assert.deepEqual(Model.logicalSize(d[1]), { w: 1080, h: 1920 })
 })
 
-test("configured: unknown scale falls back to the live scale when the display is on and not mirroring, else 1", () => {
+test("configured: unknown scale falls back to the live scale when the display is on and not mirroring, else to Hyprland's auto scale", () => {
   const auto = 'local omarchy_monitor_scale = "auto"\nhl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy_monitor_scale })\n'
   const clean = one({ scale: 1.5 }, { scale: 2 }, auto)
   assert.deepEqual(clean.map((x) => [x.scale, x.scaleKnown]), [[1.5, false], [2, false]])
+  // A toggle's temporary live scale (mirror: 1) is never recorded.
   const mirrored = one({ scale: 1.5 }, { scale: 1, mirrorOf: "eDP-1" }, auto)
-  assert.equal(mirrored[1].scale, 1)
+  assert.equal(mirrored[1].scale, 2)
   const off = one({ scale: 1.5, disabled: true }, {}, auto)
-  assert.equal(off[0].scale, 1)
+  assert.equal(off[0].scale, 1.5)
   assert.equal(off[0].scaleKnown, false)
 })
 

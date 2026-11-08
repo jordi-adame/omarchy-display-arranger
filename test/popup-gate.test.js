@@ -96,3 +96,11 @@ test("Panel.qml takes a new monitor snapshot only when Model.liveSignature chang
   assert.match(poll, /root\.monitorsSignature/)
   assert.match(poll, /if \([^)]*!==[^)]*\)[\s\S]*root\.monitorsJson = raw/)
 })
+
+test("Panel.qml reads the previous display-arrangement.lua and hands its fallback scales to the model", () => {
+  assert.match(panelSource, /readonly property string arrangementPath: Quickshell\.env\("HOME"\) \+ "\/\.config\/hypr\/display-arrangement\.lua"/)
+  assert.match(panelSource, /command: \["cat", "--", root\.arrangementPath\]/)
+  assert.match(panelSource, /Model\.configuredDisplays\(Model\.parseMonitors\(monitorsJson\), monitorsLuaText, Model\.parseFallbackScales\(arrangementText\)\)/)
+  const refresh = panelSource.slice(panelSource.indexOf("function refresh("), panelSource.indexOf("function moveCursor("))
+  assert.match(refresh, /arrangementProc\.running = true/)
+})

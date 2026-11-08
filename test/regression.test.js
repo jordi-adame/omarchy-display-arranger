@@ -30,7 +30,9 @@ function machine(monitorsLua = WIRED) {
   const state = { monitorsLua, stub }
   state.effective = () => runConfig(state.monitorsLua, fs.existsSync(stub.target) ? fs.readFileSync(stub.target, "utf8") : null, stub.flags())
   state.click = (kind, snapshot) => {
-    const d = configured(snapshot, state.monitorsLua)
+    // Like Panel.qml: the previous file's fallback scales are read before the plan is built.
+    const previous = fs.existsSync(stub.target) ? Model.parseFallbackScales(fs.readFileSync(stub.target, "utf8")) : {}
+    const d = configured(snapshot, state.monitorsLua, previous)
     const tile = Model.catalog(d).find((t) => t.kind === kind)
     const plan = Model.applyPlan(tile, d, { writtenAt: "2026-11-07T21:44:46Z" })
     const res = runApply(stub, ["apply", plan.mode, plan.luaText, plan.evalExpr, plan.evalExprLidClosed])
@@ -146,6 +148,65 @@ test("mirror on while the Display panel has set 1x: leaving mirror restores 1x a
   assert.equal(EXT_RULE(r.calls).mirror, "eDP-1")
   r = m.click("left", SNAP_MIRRORED)
   expectExternal(r.calls, 1, "-3840x-480", "1x left after mirror")
+})
+
+// Omarchy's default monitors.lua: no numeric scale anywhere, no rule for the
+// external, so every scale is "auto" and unreadable. The fixture laptop
+// (1920x1200 on 300x190 mm) runs at Hyprland's auto 1.5, the 4K external
+// (340x190 mm) at 2.
+// The require line is what the first click appends (wiring.test.js).
+const AUTO_DEFAULT = 'local omarchy_gdk_scale = 1\nlocal omarchy_monitor_scale = "auto"\n' +
+  'hl.env("GDK_SCALE", tostring(omarchy_gdk_scale))\n' +
+  'hl.monitor({ output = "", mode = "preferred", position = "auto", scale = omarchy_monitor_scale })\n' +
+  '\n-- Display arrangement from the jordi-adame.display-arranger bar widget. Keep this the last line.\nrequire("hypr.display-arrangement")\n'
+const SNAP_AUTO_ABOVE = () => [laptop({ scale: 1.5, x: 0, y: 0 }), northwind("DEMO00000742", { scale: 2, x: -320, y: -1080 })]
+
+// "above" at the auto scales: the external (1920x1080 logical) centered over a 1280x800 laptop.
+function expectAutoAbove(calls, file, what) {
+  assert.equal(EXT_RULE(calls).position, "-320x-1080", what + ": external position")
+  assert.equal(EXT_RULE(calls).scale, undefined, what + ": no scale in the rule, Hyprland keeps auto")
+  assert.equal(LAP_RULE(calls).position, "0x0", what + ": laptop position")
+  assert.match(file, /DEMO00000742[^\n]*fallback_scale = 2 \}/, what + ": external fallback")
+  assert.match(file, /"eDP-1"[^\n]*fallback_scale = 1\.5 \}/, what + ": laptop fallback")
+}
+
+test("auto scale, 4K external: above, mirror on, above again keep the positions for scale 2", () => {
+  const m = machine(AUTO_DEFAULT)
+  let r = m.click("above", SNAP_AUTO_ABOVE())
+  expectAutoAbove(r.calls, m.file(), "step 1 above")
+
+  r = m.click("mirror", SNAP_AUTO_ABOVE())
+  assert.equal(EXT_RULE(r.calls).mirror, "eDP-1")
+  assert.match(m.file(), /DEMO00000742[^\n]*fallback_scale = 2 \}/, "mirror click keeps the trustworthy live 2")
+
+  // Back to "above" while mirrored: the external's live scale (1, from Omarchy's
+  // mirror rule) is not trustworthy; Hyprland's own auto scale for it is 2.
+  r = m.click("above", [laptop({ scale: 1.5 }), northwind("DEMO00000742", { scale: 1, mirrorOf: "eDP-1", x: 1280, y: 0 })])
+  assert.deepEqual(Object.keys(m.stub.flags()), [])
+  expectAutoAbove(r.calls, m.file(), "step 3 above after mirror")
+})
+
+test("auto scale, laptop 1920x1200 on 300x190 mm: laptop off, then above puts the laptop back at its auto scale 1.5", () => {
+  const m = machine(AUTO_DEFAULT)
+  m.click("off", SNAP_AUTO_ABOVE())
+  // Disabled, the laptop reports no size and scale 1: not trustworthy.
+  const r = m.click("above", [laptop({ disabled: true, width: 0, height: 0, scale: 1 }), northwind("DEMO00000742", { scale: 2, x: 0, y: 0 })])
+  expectAutoAbove(r.calls, m.file(), "above after laptop off")
+})
+
+test("auto scale, no physical size: an untrustworthy live scale takes the previous file's fallback, else none is recorded", () => {
+  const m = machine(AUTO_DEFAULT)
+  const noSize = (over) => northwind("DEMO00000742", Object.assign({ physicalWidth: 0, physicalHeight: 0 }, over))
+  // Nothing trustworthy, nothing to compute, no previous file: no fallback, positions for 1.
+  let r = m.click("above", [laptop({ scale: 1.5 }), noSize({ scale: 1, mirrorOf: "eDP-1", x: 1280, y: 0 })])
+  assert.doesNotMatch(m.file(), /DEMO00000742[^\n]*fallback_scale/)
+  assert.equal(EXT_RULE(r.calls).position, "-1280x-2160", "3840x2160 at 1, centered over the 1280 px laptop")
+  // A clean click records the live 2; the next mirrored click keeps it from the previous file.
+  m.click("above", [laptop({ scale: 1.5 }), noSize({ scale: 2, x: -320, y: -1080 })])
+  assert.match(m.file(), /DEMO00000742[^\n]*fallback_scale = 2 \}/)
+  r = m.click("above", [laptop({ scale: 1.5 }), noSize({ scale: 1, mirrorOf: "eDP-1", x: 1280, y: 0 })])
+  assert.match(m.file(), /DEMO00000742[^\n]*fallback_scale = 2 \}/)
+  assert.equal(EXT_RULE(r.calls).position, "-320x-1080")
 })
 
 // Omarchy's own persist_scale (from omarchy-hyprland-monitor-scaling) edits the

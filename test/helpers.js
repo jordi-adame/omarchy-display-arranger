@@ -50,9 +50,10 @@ function displays(list) {
   return Model.parseMonitors(JSON.stringify(list))
 }
 
-// Displays as the panel builds them: live snapshot plus monitors.lua.
-function configured(list, monitorsLua = WIRED) {
-  return Model.configuredDisplays(displays(list), monitorsLua)
+// Displays as the panel builds them: live snapshot plus monitors.lua, plus
+// the fallback scales of the previous display-arrangement.lua when given.
+function configured(list, monitorsLua = WIRED, previousFallbacks = {}) {
+  return Model.configuredDisplays(displays(list), monitorsLua, previousFallbacks)
 }
 
 // Every temp dir lives under one base that is removed when the run ends.

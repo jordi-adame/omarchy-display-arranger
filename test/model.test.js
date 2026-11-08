@@ -57,6 +57,24 @@ test("logical size follows transform and scale", () => {
   assert.deepEqual(Model.logicalSize(d), { w: 960, h: 1536 })
 })
 
+test("liveSignature: the same for snapshots that differ only in volatile fields, different when the layout changes", () => {
+  // Panel.qml polls hyprctl every 3 s while the popup is open and rebuilds the
+  // tiles only when this changes, so focus or workspace changes do not.
+  const a = JSON.stringify([laptop({ focused: true, activeWorkspace: { id: 1, name: "1" }, dpmsStatus: true }), northwind("DEMO00000742", { focused: false, specialWorkspace: { id: 0, name: "" } })])
+  const b = JSON.stringify([laptop({ focused: false, activeWorkspace: { id: 3, name: "3" }, dpmsStatus: false }), northwind("DEMO00000742", { focused: true, specialWorkspace: { id: -98, name: "special" } })])
+  assert.equal(Model.liveSignature(a), Model.liveSignature(b))
+  for (const changed of [
+    [laptop(), northwind("DEMO00000742", { x: 1920 })],
+    [laptop({ disabled: true, width: 0, height: 0 }), northwind("DEMO00000742")],
+    [laptop(), northwind("DEMO00000742", { mirrorOf: "eDP-1", scale: 1 })],
+    [laptop(), northwind("DEMO00000742", { scale: 1 })],
+    [laptop({ transform: 1 }), northwind("DEMO00000742")],
+    [laptop()],
+    [laptop(), northwind("DEMO00000742"), northwind("DEMO00000519")]
+  ]) assert.notEqual(Model.liveSignature(JSON.stringify(changed)), Model.liveSignature(a), JSON.stringify(changed))
+  assert.equal(Model.liveSignature("not json"), Model.liveSignature("[]"))
+})
+
 // ---------- monitors.lua ----------
 
 test("configured: the wired file gives the laptop its local scale and the Northwind its desc: rule", () => {

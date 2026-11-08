@@ -43,6 +43,7 @@ Panel {
   readonly property string monitorsLuaPath: Quickshell.env("HOME") + "/.config/hypr/monitors.lua"
 
   property string monitorsJson: "[]"
+  property string monitorsSignature: ""
   property string monitorsLuaText: ""
   readonly property var displays: Model.configuredDisplays(Model.parseMonitors(monitorsJson), monitorsLuaText)
   readonly property var tiles: Model.catalog(displays, root.tr)
@@ -186,8 +187,15 @@ Panel {
     stdout: StdioCollector {
       waitForEnd: true
       onStreamFinished: {
+        // Only a change in what the tiles depend on rebuilds them: the raw
+        // text also carries focus and workspace fields that change between polls.
         var raw = String(text || "").trim()
-        if (raw !== "") root.monitorsJson = raw
+        if (raw === "") return
+        var signature = Model.liveSignature(raw)
+        if (signature !== root.monitorsSignature) {
+          root.monitorsSignature = signature
+          root.monitorsJson = raw
+        }
       }
     }
   }

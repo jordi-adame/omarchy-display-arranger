@@ -89,3 +89,10 @@ test("Panel.qml keeps the result of a deferred run until the next click, not unt
   assert.match(choose, /root\.statusText = ""/)
   assert.match(choose, /root\.noticeText = ""/)
 })
+
+test("Panel.qml takes a new monitor snapshot only when Model.liveSignature changes", () => {
+  const poll = panelSource.slice(panelSource.indexOf("id: monitorsProc"), panelSource.indexOf("id: applyProc"))
+  assert.match(poll, /Model\.liveSignature\(raw\)/)
+  assert.match(poll, /root\.monitorsSignature/)
+  assert.match(poll, /if \([^)]*!==[^)]*\)[\s\S]*root\.monitorsJson = raw/)
+})

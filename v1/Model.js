@@ -306,6 +306,13 @@ function parseMonitors(raw) {
   return laptop.concat(externals)
 }
 
+// What the tiles depend on in a `hyprctl monitors all -j` snapshot: the
+// parsed displays, without the volatile fields (focus, workspaces, dpms) that
+// change between polls while nothing about the layout does.
+function liveSignature(raw) {
+  return JSON.stringify(parseMonitors(raw))
+}
+
 function laptopOf(displays) {
   for (var i = 0; i < displays.length; i++) if (displays[i].isLaptop) return displays[i]
   return null
@@ -1228,6 +1235,7 @@ if (typeof module !== "undefined") {
     validScale: validScale,
     scaleKey: scaleKey,
     parseMonitors: parseMonitors,
+    liveSignature: liveSignature,
     parseConfig: parseConfig,
     resolveDisplay: resolveDisplay,
     configuredDisplays: configuredDisplays,

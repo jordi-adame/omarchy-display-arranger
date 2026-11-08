@@ -261,9 +261,16 @@ test("the uninstall commands in the README remove exactly what was appended", ()
   const stub = clicked()
   runApply(stub, ["wire"])
   const wired = fs.readFileSync(stub.monitorsLua, "utf8")
-  // README, "Uninstall": sed -i -e '/^-- Display arrangement from the io.github.jordi-adame.display-arranger bar widget/d' -e '/^require("hypr.display-arrangement")$/d'
+  // README, "Uninstall": sed -i -e '/^-- Display arrangement from the .*display-arranger bar widget/d' -e '/^require("hypr.display-arrangement")$/d'
   const restored = wired.split("\n")
-    .filter((l) => !/^-- Display arrangement from the io\.github\.jordi-adame\.display-arranger bar widget/.test(l) && !/^require\("hypr\.display-arrangement"\)$/.test(l))
+    .filter((l) => !/^-- Display arrangement from the .*display-arranger bar widget/.test(l) && !/^require\("hypr\.display-arrangement"\)$/.test(l))
     .join("\n")
   assert.equal(restored, MONITORS_LUA + "\n", "only the blank separator line remains")
+})
+
+test("the README uninstall pattern also removes the comments written under older ids", () => {
+  const pattern = /^-- Display arrangement from the .*display-arranger bar widget/
+  for (const id of ["jordi.display-arranger", "jordi-adame.display-arranger", "io.github.jordi-adame.display-arranger"]) {
+    assert.match("-- Display arrangement from the " + id + " bar widget. Keep this the last line.", pattern, id)
+  }
 })

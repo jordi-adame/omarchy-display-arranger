@@ -34,7 +34,7 @@ outlives the file it loads.
 2. If you said yes to the popup, remove the two lines it added to `monitors.lua`:
 
    ```bash
-   sed -i -e '/^-- Display arrangement from the io.github.jordi-adame.display-arranger bar widget/d' \
+   sed -i -e '/^-- Display arrangement from the .*display-arranger bar widget/d' \
           -e '/^require("hypr.display-arrangement")$/d' ~/.config/hypr/monitors.lua
    ```
 

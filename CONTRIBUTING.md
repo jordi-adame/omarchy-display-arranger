@@ -11,7 +11,7 @@
 
 ```bash
 mkdir -p .scratch
-TMPDIR=$PWD/.scratch node --test                          # 201 tests
+TMPDIR=$PWD/.scratch node --test                          # 202 tests
 omarchy plugin validate .
 /usr/lib/qt6/bin/qmllint v3/TileGrid.qml v3/Panel.qml     # qs.* import warnings are expected
 bash -n v3/apply.sh

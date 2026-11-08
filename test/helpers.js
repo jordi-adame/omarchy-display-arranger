@@ -192,7 +192,10 @@ const FLAG_DISABLE = (internal) => `hl.monitor({ output = "${internal}", disable
 // Stub commands for apply.sh. Every call is appended to calls.log; the stub
 // hyprctl answers `eval` with $STUB_EVAL_REPLY (default "ok"). The Omarchy
 // stubs write and remove the toggle flag files like the real commands do, so
-// a sequence of clicks can be followed through the flags directory.
+// a sequence of clicks can be followed through the flags directory. The
+// notify-send stub only records its call. opts.monitorsLua, when a string,
+// is written as the fake home's monitors.lua (next to the target); without it
+// there is no monitors.lua, so apply.sh has nothing to wire.
 function stubEnv(opts = {}) {
   const root = tmpdir("stub")
   const bin = path.join(root, "bin")
@@ -212,11 +215,17 @@ function stubEnv(opts = {}) {
     `case "$1" in\noff) ${writeFlag("internal-monitor-disable", FLAG_DISABLE("eDP-1"))};;\non) rm -f "${toggles}/internal-monitor-disable.lua" ;;\nesac\n`)
   const mirror = stub("omarchy-hyprland-monitor-internal-mirror",
     `case "$1" in\non) rm -f "${toggles}/internal-monitor-disable.lua"\n${writeFlag("internal-monitor-mirror", FLAG_MIRROR("DP-1", "eDP-1"))};;\noff) rm -f "${toggles}/internal-monitor-mirror.lua" ;;\nesac\n`)
+  const notify = stub("notify-send")
   for (const flag of opts.flags || []) fs.writeFileSync(path.join(toggles, flag + ".lua"), "-- flag\n")
   const target = path.join(root, "hypr", "display-arrangement.lua")
   if (opts.existing !== undefined) {
     fs.mkdirSync(path.dirname(target), { recursive: true })
     fs.writeFileSync(target, opts.existing)
+  }
+  const monitorsLua = path.join(root, "hypr", "monitors.lua")
+  if (typeof opts.monitorsLua === "string") {
+    fs.mkdirSync(path.dirname(monitorsLua), { recursive: true })
+    fs.writeFileSync(monitorsLua, opts.monitorsLua)
   }
   const env = {
     // Stubs first on PATH, and no Hyprland instance to reach, so nothing in
@@ -228,6 +237,8 @@ function stubEnv(opts = {}) {
     DISPLAY_ARRANGER_MIRROR_CMD: mirror,
     DISPLAY_ARRANGER_TARGET: target,
     DISPLAY_ARRANGER_TOGGLES_DIR: toggles,
+    DISPLAY_ARRANGER_MONITORS_LUA: monitorsLua,
+    DISPLAY_ARRANGER_NOTIFY_CMD: notify,
     DISPLAY_ARRANGER_LOG_DIR: path.join(root, "log")
   }
   if (opts.evalReply) env.STUB_EVAL_REPLY = opts.evalReply
@@ -237,7 +248,11 @@ function stubEnv(opts = {}) {
     for (const f of fs.readdirSync(toggles).sort()) out[f.replace(/\.lua$/, "")] = fs.readFileSync(path.join(toggles, f), "utf8")
     return out
   }
-  return { root, env, target, toggles, calls, flags: flagsNow }
+  const applyLog = () => {
+    const file = path.join(root, "log", "apply.log")
+    return fs.existsSync(file) ? fs.readFileSync(file, "utf8") : ""
+  }
+  return { root, env, target, toggles, monitorsLua, calls, flags: flagsNow, log: applyLog }
 }
 
 function runApply(stub, args, extraEnv = {}, script = path.join(VERSION_DIR, "apply.sh")) {

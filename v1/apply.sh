@@ -14,6 +14,16 @@
 # state; it only saves one visible move (the reload the toggle command runs
 # applies the new file at once).
 #
+# After a successful write the script wires monitors.lua: when
+# ~/.config/hypr/monitors.lua exists and has no require of
+# hypr.display-arrangement, it copies it to monitors.lua.bak.<stamp> and
+# appends a comment plus require("hypr.display-arrangement") at the end, once,
+# atomically (tmp + mv). Hyprland reloads on that write and loads the file
+# from then on. A hand-written require line counts; a commented-out one does
+# not. A missing or read-only monitors.lua is left alone and the popup is told
+# (a "notice:" line on stdout). The wiring is logged and announced once with
+# notify-send.
+#
 # Dry run (prints what it would run and write, changes nothing): pass
 # --dry-run, set DISPLAY_ARRANGER_DRY_RUN=1, or put a file named DRY_RUN next
 # to this script.
@@ -38,11 +48,19 @@ INTERNAL_CMD="${DISPLAY_ARRANGER_INTERNAL_CMD:-omarchy-hyprland-monitor-internal
 MIRROR_CMD="${DISPLAY_ARRANGER_MIRROR_CMD:-omarchy-hyprland-monitor-internal-mirror}"
 TARGET="${DISPLAY_ARRANGER_TARGET:-$HOME/.config/hypr/display-arrangement.lua}"
 TOGGLES_DIR="${DISPLAY_ARRANGER_TOGGLES_DIR:-$HOME/.local/state/omarchy/toggles/hypr}"
+MONITORS_LUA="${DISPLAY_ARRANGER_MONITORS_LUA:-$HOME/.config/hypr/monitors.lua}"
+NOTIFY_CMD="${DISPLAY_ARRANGER_NOTIFY_CMD:-notify-send}"
 LOG_DIR="${DISPLAY_ARRANGER_LOG_DIR:-${XDG_STATE_HOME:-$HOME/.local/state}/display-arranger}"
 
 DISABLE_FLAG="$TOGGLES_DIR/internal-monitor-disable.lua"
 MIRROR_FLAG="$TOGGLES_DIR/internal-monitor-mirror.lua"
 CLAMSHELL_FLAG="$TOGGLES_DIR/internal-monitor-clamshell.lua"
+
+# What wire_monitors_lua appends, and how it recognises a require of the file
+# (outside a comment, with or without parentheses, double or single quotes).
+REQUIRE_LINE='require("hypr.display-arrangement")'
+REQUIRE_COMMENT='-- Display arrangement from the jordi-adame.display-arranger bar widget. Keep this the last line.'
+REQUIRE_PATTERN='^[[:space:]]*require[[:space:]]*\(?[[:space:]]*["'"'"']hypr\.display-arrangement["'"'"']'
 
 dry_run=0
 if [[ ${1:-} == --dry-run ]]; then
@@ -68,6 +86,12 @@ fail() {
   exit 1
 }
 
+# Something the popup should show without failing the click (Panel.qml picks
+# up the first "notice:" line of stdout).
+notice() {
+  say "notice: $*"
+}
+
 # Runs a command, or in a dry run prints it.
 run() {
   if (( dry_run )); then
@@ -86,6 +110,7 @@ write_target() {
   if (( dry_run )); then
     say "dry-run: would write $TARGET (atomic, tmp + mv):"
     printf '%s' "$text"
+    wire_monitors_lua
     return 0
   fi
 
@@ -104,6 +129,66 @@ write_target() {
   chmod 644 "$tmp"
   mv -f "$tmp" "$TARGET" || { rm -f "$tmp"; fail "cannot move $tmp to $TARGET"; }
   log "wrote $TARGET"
+  wire_monitors_lua
+}
+
+# Makes monitors.lua load the file written above: appends the require line
+# (with its comment) once, at the end, after a timestamped backup, through a
+# temp file renamed over the original. Idempotent: a monitors.lua that already
+# requires the file is never touched. A missing or read-only file is left
+# alone and the popup is told; this never fails the click, which has already
+# been applied live.
+wire_monitors_lua() {
+  local target="$MONITORS_LUA" dir stamp backup tmp
+  if [[ ! -f $target ]]; then
+    notice "monitors.lua not found at $target; add $REQUIRE_LINE at its end yourself so the arrangement survives a reload"
+    return 0
+  fi
+  if grep -Eq "$REQUIRE_PATTERN" "$target"; then
+    (( dry_run )) && say "dry-run: $target already requires hypr.display-arrangement; nothing to add"
+    return 0
+  fi
+  dir="$(dirname "$target")"
+  stamp="$(date +%Y%m%d-%H%M%S)"
+  backup="$target.bak.$stamp"
+  if (( dry_run )); then
+    say "dry-run: would copy $target to $backup and append to $target:"
+    printf '%s\n%s\n' "$REQUIRE_COMMENT" "$REQUIRE_LINE"
+    return 0
+  fi
+  if [[ ! -w $target || ! -w $dir ]]; then
+    notice "monitors.lua is not writable ($target); add $REQUIRE_LINE at its end yourself"
+    return 0
+  fi
+  if ! cp -p -- "$target" "$backup"; then
+    notice "could not back up monitors.lua to $backup; left unchanged"
+    return 0
+  fi
+  if ! tmp="$(mktemp "$target.XXXXXX")"; then
+    notice "could not create a temp file next to monitors.lua; left unchanged"
+    return 0
+  fi
+  if ! {
+    cat -- "$target"
+    # End an unterminated last line first, then a blank line, the comment and the require.
+    if [[ -s $target && $(tail -c 1 -- "$target" | wc -l) -eq 0 ]]; then printf '\n'; fi
+    printf '\n%s\n%s\n' "$REQUIRE_COMMENT" "$REQUIRE_LINE"
+  } >"$tmp"; then
+    rm -f "$tmp"
+    notice "could not write $tmp; monitors.lua left unchanged"
+    return 0
+  fi
+  chmod --reference="$target" "$tmp" 2>/dev/null || chmod 644 "$tmp"
+  if ! mv -f -- "$tmp" "$target"; then
+    rm -f "$tmp"
+    notice "could not replace monitors.lua; left unchanged (backup: $backup)"
+    return 0
+  fi
+  log "wired $target (backup $backup)"
+  notice "Added $REQUIRE_LINE to monitors.lua so the arrangement survives a reload (backup: $backup)"
+  if command -v "$NOTIFY_CMD" >/dev/null 2>&1; then
+    "$NOTIFY_CMD" "Display arranger" "monitors.lua now loads the arrangement file (backup: monitors.lua.bak.$stamp)" >/dev/null 2>&1 || true
+  fi
 }
 
 # hyprctl eval prints "ok" on success; anything else is Hyprland's error.

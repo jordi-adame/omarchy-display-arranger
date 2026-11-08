@@ -54,6 +54,9 @@ Panel {
   property bool cursorActive: false
   property string pendingId: ""
   property string statusText: ""
+  // What apply.sh reports without failing (a "notice:" line): the monitors.lua
+  // wiring it did, or why it did not touch the file.
+  property string noticeText: ""
   // A plan waiting for the popup to unmap (mirror and laptop-off only).
   property var deferredPlan: null
   readonly property bool busy: applyProc.running || deferredPlan !== null
@@ -151,6 +154,7 @@ Panel {
       cursorActive = false
       cursorIndex = -1
       statusText = ""
+      noticeText = ""
     }
   }
 
@@ -199,6 +203,8 @@ Panel {
       var out = String(applyOut.text || "")
       if (exitCode !== 0) root.statusText = err !== "" ? err.split("\n")[0] : root.tr("status.failed", "Could not apply the arrangement")
       else if (out.indexOf("dry-run:") >= 0) root.statusText = root.tr("status.dryRun", "Dry run: nothing applied (see the apply log)")
+      var notices = out.split("\n").filter(function(l) { return l.indexOf("notice: ") === 0 })
+      root.noticeText = notices.length > 0 ? notices[0].slice("notice: ".length) : ""
       root.pendingId = ""
       root.refresh()
     }
@@ -315,6 +321,18 @@ Panel {
           color: root.bar.foreground
           font.family: root.bar.fontFamily
           font.pixelSize: Style.font.body
+        }
+
+        // Set once by the first click: monitors.lua was wired (or why it was not).
+        Text {
+          width: parent.width
+          visible: root.noticeText !== ""
+          wrapMode: Text.Wrap
+          textFormat: Text.PlainText
+          text: root.noticeText
+          color: Qt.darker(root.bar.foreground, 1.4)
+          font.family: root.bar.fontFamily
+          font.pixelSize: Style.font.caption
         }
 
         Text {

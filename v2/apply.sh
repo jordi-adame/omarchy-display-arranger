@@ -1,12 +1,15 @@
 #!/bin/bash
-# Applies one display arrangement chosen in the jordi-adame.display-arranger popup.
+# Applies one display arrangement chosen in the jordi-adame.display-arranger
+# popup, or wires monitors.lua to load the arrangement file.
 #
 #   apply.sh [--dry-run] apply <normal|laptop-off|mirror> <lua-text> <eval-expr> <eval-expr-lid-closed>
+#   apply.sh [--dry-run] wire
 #
 # The Lua text is the whole of ~/.config/hypr/display-arrangement.lua and the
 # eval expressions hold one hl.monitor call per display; Model.js builds them,
-# nothing here builds Lua. After a successful write, wire_monitors_lua makes
-# monitors.lua require the file (once, after a backup).
+# nothing here builds Lua. `apply` never touches monitors.lua: `wire` runs
+# only when the popup's consent notice is answered Yes, and makes monitors.lua
+# require the file (once, after a backup).
 #
 # Dry run (prints what it would do, changes nothing): --dry-run,
 # DISPLAY_ARRANGER_DRY_RUN=1, or a file named DRY_RUN next to this script.
@@ -94,7 +97,6 @@ write_target() {
   if (( dry_run )); then
     say "dry-run: would write $TARGET (atomic, tmp + mv):"
     printf '%s' "$text"
-    wire_monitors_lua
     return 0
   fi
 
@@ -113,13 +115,13 @@ write_target() {
   chmod 644 "$tmp"
   mv -f "$tmp" "$TARGET" || { rm -f "$tmp"; fail "cannot move $tmp to $TARGET"; }
   log "wrote $TARGET"
-  wire_monitors_lua
 }
 
 # Makes monitors.lua load the file: appends the require line once, after a
 # timestamped backup, via tmp + mv. A file that already requires it is never
-# touched; a missing or read-only one is left alone and the popup is told.
-# Never fails the click, which has already been applied live.
+# touched; a missing or read-only one is left alone and the popup is told, as
+# is a missing arrangement file (requiring it would be a config error).
+# Exits 0 whatever happens: the outcome is reported, not failed.
 wire_monitors_lua() {
   local target="$MONITORS_LUA" dir stamp backup tmp
   if [[ ! -f $target ]]; then
@@ -128,6 +130,10 @@ wire_monitors_lua() {
   fi
   if requires_arrangement "$target"; then
     (( dry_run )) && say "dry-run: $target already requires hypr.display-arrangement; nothing to add"
+    return 0
+  fi
+  if [[ ! -f $TARGET ]]; then
+    notice "nothing to keep yet ($TARGET does not exist); click a tile first"
     return 0
   fi
   dir="$(dirname "$target")"
@@ -246,8 +252,19 @@ apply)
   *) fail "unknown mode: $mode" ;;
   esac
   ;;
+wire)
+  if (( $# != 1 )); then
+    echo "Usage: apply.sh [--dry-run] wire" >&2
+    exit 2
+  fi
+  (( dry_run )) && say "dry-run: wire $MONITORS_LUA"
+  wire_monitors_lua
+  ;;
 *)
-  echo "Usage: apply.sh [--dry-run] apply <normal|laptop-off|mirror> <lua-text> <eval-expr> <eval-expr-lid-closed>" >&2
+  {
+    echo "Usage: apply.sh [--dry-run] apply <normal|laptop-off|mirror> <lua-text> <eval-expr> <eval-expr-lid-closed>"
+    echo "       apply.sh [--dry-run] wire"
+  } >&2
   exit 2
   ;;
 esac

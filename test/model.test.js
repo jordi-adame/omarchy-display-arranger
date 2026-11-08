@@ -136,6 +136,14 @@ test("configured: expressions, quoted locals, bare locals, comments", () => {
   ])
 })
 
+test("configured: single-quoted strings in rules and locals are read like double-quoted ones", () => {
+  const lua = "local omarchy_monitor_scale = '1.25'\n" +
+    "hl.monitor({ output = '', mode = 'preferred', position = 'auto', scale = omarchy_monitor_scale })\n" +
+    "hl.monitor({ output = 'desc:Northwind Corporation NW-1560 DEMO00000742', mode = '3840x2160@60', position = '0x0', scale = 2 })\n"
+  const d = one({}, {}, lua)
+  assert.deepEqual(d.map((x) => [x.scale, x.scaleKnown, x.modeText, x.rule]), [[1.25, true, "preferred", ""], [2, true, "3840x2160@60", KEY_742]])
+})
+
 test("configured: an empty or missing monitors.lua keeps live scales for the pictures", () => {
   const d = one({ scale: 1.25 }, {}, "")
   assert.deepEqual(d.map((x) => [x.scale, x.scaleKnown, x.modeText]), [[1.25, false, "preferred"], [2, false, "preferred"]])

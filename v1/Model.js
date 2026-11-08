@@ -326,7 +326,7 @@ function externalsOf(displays) {
 //   its place in the file.
 // - A rule that names no scale means "auto": Hyprland picks a scale from the
 //   panel's size. That cannot be read from the file, so it counts as unknown.
-// Only one-line rules are read. A value that is a quoted string stands for
+// Only one-line rules are read. A value in double or single quotes stands for
 // itself, a bare word may name a `local`, a number is a number; anything else
 // (an expression) is unknown.
 
@@ -340,8 +340,8 @@ function parseLocals(lines) {
   lines.forEach(function(line) {
     var m = /^\s*local\s+([A-Za-z_][A-Za-z0-9_]*)\s*=\s*(.*?)\s*$/.exec(stripComments(line))
     if (!m || m[2] === "" || Object.prototype.hasOwnProperty.call(locals, m[1])) return
-    var quoted = /^"([^"]*)"$/.exec(m[2])
-    if (quoted) locals[m[1]] = quoted[1]
+    var quoted = /^"([^"]*)"$|^'([^']*)'$/.exec(m[2])
+    if (quoted) locals[m[1]] = quoted[1] !== undefined ? quoted[1] : quoted[2]
     else if (!/\s/.test(m[2])) locals[m[1]] = m[2]
   })
   return locals
@@ -352,8 +352,8 @@ function scalarText(value, locals) {
   if (value === undefined || value === null) return null
   var v = String(value).trim()
   if (v === "") return null
-  var quoted = /^"([^"]*)"$/.exec(v)
-  if (quoted) return quoted[1]
+  var quoted = /^"([^"]*)"$|^'([^']*)'$/.exec(v)
+  if (quoted) return quoted[1] !== undefined ? quoted[1] : quoted[2]
   if (/^[A-Za-z_][A-Za-z0-9_]*$/.test(v)) return Object.prototype.hasOwnProperty.call(locals, v) ? locals[v] : null
   if (/^[0-9.]+$/.test(v)) return v
   return null
@@ -378,9 +378,9 @@ function parseRules(lines, locals) {
     var m = /^\s*hl\.monitor\s*\(\s*\{(.*)\}\s*\)\s*$/.exec(code)
     if (!m) return
     var fields = "," + m[1].replace(/;/g, ",")
-    var out = /,\s*output\s*=\s*"([^"]*)"/.exec(fields)
+    var out = /,\s*output\s*=\s*(?:"([^"]*)"|'([^']*)')/.exec(fields)
     if (!out) return
-    var output = out[1]
+    var output = out[1] !== undefined ? out[1] : out[2]
     var rule = rules[output]
     if (!rule) rule = rules[output] = { output: output }
     rank++
@@ -934,7 +934,7 @@ var LOADER = [
   "  for _, line in ipairs(lines) do",
   "    local name, value = strip_comments(line):match(\"^%s*local%s+([%a_][%w_]*)%s*=%s*(.-)%s*$\")",
   "    if name and value ~= \"\" and locals[name] == nil then",
-  "      local quoted = value:match('^\"([^\"]*)\"$')",
+  "      local quoted = value:match('^\"([^\"]*)\"$') or value:match(\"^'([^']*)'$\")",
   "      if quoted then locals[name] = quoted",
   "      elseif not value:find(\"%s\") then locals[name] = value end",
   "    end",
@@ -947,7 +947,7 @@ var LOADER = [
   "  if value == nil then return nil end",
   "  value = trim(value)",
   "  if value == \"\" then return nil end",
-  "  local quoted = value:match('^\"([^\"]*)\"$')",
+  "  local quoted = value:match('^\"([^\"]*)\"$') or value:match(\"^'([^']*)'$\")",
   "  if quoted then return quoted end",
   "  if value:match(\"^[%a_][%w_]*$\") then return locals[value] end",
   "  if value:match(\"^[%d%.]+$\") then return value end",
@@ -967,7 +967,7 @@ var LOADER = [
   "    local body = strip_comments(line):match(\"^%s*hl%.monitor%s*%(%s*%{(.*)%}%s*%)%s*$\")",
   "    if body then",
   "      local fields = \",\" .. body:gsub(\";\", \",\")",
-  "      local output = fields:match(',%s*output%s*=%s*\"([^\"]*)\"')",
+  "      local output = fields:match(',%s*output%s*=%s*\"([^\"]*)\"') or fields:match(\",%s*output%s*=%s*'([^']*)'\")",
   "      if output then",
   "        local rule = rules[output]",
   "        if not rule then rule = { output = output }; rules[output] = rule end",

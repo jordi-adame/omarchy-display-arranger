@@ -119,6 +119,17 @@ test("scale from the catch-all rule when no rule names the display", () => {
   assert.deepEqual(calls[1], { output: KEY_742, mode: "preferred", position: "960x-240", scale: 2 })
 })
 
+test("single-quoted strings in monitors.lua are read by the loader too", () => {
+  const monitors = "local panel = '1.25'\n" +
+    "hl.monitor({ output = 'eDP-1', mode = 'preferred', position = 'auto', scale = panel })\n" +
+    "hl.monitor({ output = 'desc:Northwind Corporation NW-1560 DEMO00000742', mode = '3840x2160@60', position = '0x0', scale = 2 })\n"
+  const calls = runLua(fileFor(one, "above"), monitors)
+  assert.deepEqual(calls, [
+    { output: "eDP-1", mode: "preferred", position: "0x0", scale: 1.25 },
+    { output: KEY_742, mode: "3840x2160@60", position: "-192x-1080", scale: 2 }
+  ])
+})
+
 test("commented-out rules are ignored", () => {
   const monitors = '-- hl.monitor({ output = "eDP-1", scale = 2 })\nhl.monitor({ output = "eDP-1", mode = "preferred", position = "auto", scale = 1.25 })\n' +
     'hl.monitor({ output = "desc:Northwind Corporation NW-1560 DEMO00000742", mode = "3840x2160@60", position = "0x0", scale = 2 }) -- scale = 1\n'

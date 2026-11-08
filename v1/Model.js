@@ -41,16 +41,6 @@ function scaleKey(scale) {
   return n.toFixed(2).replace(/\.?0+$/, "")
 }
 
-function formatNumber(n) {
-  return scaleKey(n)
-}
-
-function refreshText(rate) {
-  var n = Number(rate)
-  if (!isFinite(n) || n <= 0) return ""
-  return n.toFixed(2).replace(/\.?0+$/, "")
-}
-
 function isIntegral(x) {
   return x === Math.round(x)
 }
@@ -243,7 +233,8 @@ function parseMonitors(raw) {
       refresh = preferred.refresh
     }
 
-    var transform = Number(m.transform) || 0
+    var transform = Number(m.transform)
+    transform = transform >= 0 && transform <= 7 ? Math.floor(transform) : 0
     var scale = Number(m.scale)
     if (!(scale > 0)) scale = 1
     var mirrorOf = String(m.mirrorOf || "none")
@@ -260,10 +251,9 @@ function parseMonitors(raw) {
       width: width,
       height: height,
       refresh: isFinite(refresh) ? refresh : 0,
-      transform: transform >= 0 && transform <= 7 ? Math.floor(transform) : 0,
+      transform: transform,
       scale: scale,
       liveScale: scale,
-      liveTransform: transform >= 0 && transform <= 7 ? Math.floor(transform) : 0,
       x: Number(m.x) || 0,
       y: Number(m.y) || 0,
       disabled: m.disabled === true,
@@ -884,7 +874,7 @@ function ruleFields(display, pos) {
     "mode = " + luaString(display.modeText || "preferred"),
     "position = " + luaString(positionText(pos))
   ]
-  if (display.scaleKnown) fields.push("scale = " + formatNumber(display.scale))
+  if (display.scaleKnown) fields.push("scale = " + scaleKey(display.scale))
   if (display.transform) fields.push("transform = " + display.transform)
   return fields
 }
